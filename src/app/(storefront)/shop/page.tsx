@@ -1,0 +1,553 @@
+"use client";
+
+import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { api } from "@/lib/storefront/api-client";
+import { ProductGrid } from "@/components/storefront/organisms/product-grid";
+import { FilterSidebar } from "@/components/storefront/organisms/filter-sidebar";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Filter, X } from "lucide-react";
+import type { ProductListResponse } from "@/types/storefront";
+import { CategoryRail } from "@/components/storefront/organisms/category-rail";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
+import { usePathname, useRouter, useSearchParams, type ReadonlyURLSearchParams } from "next/navigation";
+
+export default function ShopPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const initedRef = useRef(false);
+  const lastUrlSyncedRef = useRef<string | null>(null);
+  const [filters, setFilters] = useState({
+    page: 1,
+    limit: 12,
+    sortBy: "newest" as const,
+    minPrice: undefined as number | undefined,
+    maxPrice: undefined as number | undefined,
+    minRating: undefined as number | undefined,
+    categoryIds: undefined as string[] | undefined,
+    inStock: false,
+    onSale: false,
+    isFeatured: false,
+    search: undefined as string | undefined,
+  });
+
+  const parseFiltersFromSearchParams = (sp: ReadonlyURLSearchParams) => {
+    const page = parseInt(sp.get("page") || "1");
+    const limit = parseInt(sp.get("limit") || "12");
+    const sortBy = (sp.get("sortBy") as any) || "newest";
+    const minPrice = sp.get("minPrice") ? Number(sp.get("minPrice")) : undefined;
+    const maxPrice = sp.get("maxPrice") ? Number(sp.get("maxPrice")) : undefined;
+    const minRating = sp.get("minRating") ? Number(sp.get("minRating")) : undefined;
+    const inStock = sp.get("inStock") === "true";
+    const onSale = sp.get("onSale") === "true";
+    const isFeatured = sp.get("isFeatured") === "true";
+    const categoryIds = sp.getAll("categoryId");
+    const q = sp.get("q") || sp.get("search") || undefined;
+    return {
+      page: Number.isNaN(page) ? 1 : page,
+      limit: Number.isNaN(limit) ? 12 : limit,
+      sortBy,
+      minPrice,
+      maxPrice,
+      minRating,
+      inStock,
+      onSale,
+      isFeatured,
+      search: q || undefined,
+      categoryIds: categoryIds.length ? categoryIds : undefined,
+    };
+  };
+
+  // Initialize filters from URL on first mount
+  useEffect(() => {
+    if (initedRef.current) return;
+    const next = parseFiltersFromSearchParams(searchParams);
+    setFilters((prev) => ({ ...prev, ...next }));
+    lastUrlSyncedRef.current = searchParams.toString();
+    initedRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!initedRef.current) return;
+    const qs = searchParams.toString();
+    if (qs === lastUrlSyncedRef.current) return;
+    lastUrlSyncedRef.current = qs;
+    const next = parseFiltersFromSearchParams(searchParams);
+    setFilters((prev) => ({ ...prev, ...next }));
+  }, [searchParams]);
+
+  // Update URL when filters change (shallow) with guard to avoid loops
+  const lastQsRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!initedRef.current) return;
+    const params = new URLSearchParams();
+    params.set("page", String(filters.page));
+    params.set("limit", String(filters.limit));
+    params.set("sortBy", filters.sortBy);
+    if (filters.minPrice !== undefined) params.set("minPrice", String(filters.minPrice));
+    if (filters.maxPrice !== undefined) params.set("maxPrice", String(filters.maxPrice));
+    if (filters.minRating !== undefined) params.set("minRating", String(filters.minRating));
+    if (filters.inStock) params.set("inStock", "true");
+    if (filters.onSale) params.set("onSale", "true");
+    if (filters.isFeatured) params.set("isFeatured", "true");
+    if (filters.search) params.set("q", filters.search);
+    if (filters.categoryIds && filters.categoryIds.length) {
+      const sorted = [...filters.categoryIds].sort();
+      for (const id of sorted) params.append("categoryId", id);
+    }
+    const qs = params.toString();
+    if (qs === lastQsRef.current) return;
+    const currentQs = typeof window !== "undefined" ? window.location.search.slice(1) : "";
+    if (qs === currentQs) {
+      lastQsRef.current = qs;
+      return;
+    }
+    lastQsRef.current = qs;
+    router.replace(`${pathname}?${qs}`, { scroll: false });
+  }, [filters, pathname, router]);
+
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const [pendingFilters, setPendingFilters] = useState({
+    page: 1,
+    limit: 12,
+    sortBy: "newest" as const,
+    minPrice: undefined as number | undefined,
+    maxPrice: undefined as number | undefined,
+    minRating: undefined as number | undefined,
+    categoryIds: undefined as string[] | undefined,
+    inStock: false,
+    onSale: false,
+    isFeatured: false,
+    search: undefined as string | undefined,
+  });
+
+  // Fetch products with React Query
+  const { data, isLoading, error } = useQuery<ProductListResponse>({
+    queryKey: ["shop-products", filters],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.set("page", filters.page.toString());
+      params.set("limit", filters.limit.toString());
+      params.set("sortBy", filters.sortBy);
+      if (filters.minPrice) params.set("minPrice", filters.minPrice.toString());
+      if (filters.maxPrice) params.set("maxPrice", filters.maxPrice.toString());
+      if (filters.minRating) params.set("minRating", filters.minRating.toString());
+      if (filters.categoryIds && filters.categoryIds.length > 0) {
+        const expanded = expandCategoryIds(filters.categoryIds);
+        for (const id of expanded) params.append("categoryId", id);
+      }
+      if (filters.inStock) params.set("inStock", "true");
+      if (filters.onSale) params.set("onSale", "true");
+      if (filters.isFeatured) params.set("isFeatured", "true");
+      if (filters.search) params.set("q", filters.search);
+
+      return api.get(`/api/storefront/products?${params.toString()}`);
+    },
+  });
+
+  const handleSortChange = (value: string) => {
+    setFilters((prev) => ({ ...prev, sortBy: value as any, page: 1 }));
+  };
+
+  const handleFilterChange = (newFilters: Partial<typeof filters>) => {
+    setFilters((prev) => ({ ...prev, ...newFilters, page: 1 }));
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      page: 1,
+      limit: 12,
+      sortBy: "newest",
+      minPrice: undefined,
+      maxPrice: undefined,
+      minRating: undefined,
+      categoryIds: undefined,
+      inStock: false,
+      onSale: false,
+      isFeatured: false,
+      search: undefined,
+    });
+  };
+
+  const hasActiveFilters =
+    filters.minPrice ||
+    filters.maxPrice ||
+    filters.minRating ||
+    (filters.categoryIds && filters.categoryIds.length > 0) ||
+    filters.inStock ||
+    filters.onSale ||
+    filters.isFeatured ||
+    !!filters.search;
+
+  // Fetch categories for chip labels
+  const { data: categoriesData } = useQuery<{ categories: Array<{ id: string; name: string; children?: any[] }> }>({
+    queryKey: ["categories"],
+    queryFn: () => api.get("/api/storefront/categories"),
+  });
+  const catMap = useMemo(() => {
+    const map = new Map<string, string>();
+    const cats = (categoriesData as any)?.data?.categories || categoriesData?.categories || [];
+    const walk = (nodes: any[]) => {
+      for (const n of nodes) {
+        map.set(n.id, n.name);
+        if (Array.isArray(n.children) && n.children.length) walk(n.children);
+      }
+    };
+    walk(cats);
+    return map;
+  }, [categoriesData]);
+
+  // Helpers to work with category trees (expand/compress)
+  const categoriesTree: any[] = useMemo(() => (categoriesData as any)?.data?.categories || categoriesData?.categories || [], [categoriesData]);
+  const collectDescendants = (nodes: any[], targetId: string): Set<string> => {
+    const set = new Set<string>();
+    const dfs = (n: any) => {
+      set.add(n.id);
+      if (Array.isArray(n.children)) for (const c of n.children) dfs(c);
+    };
+    const walkFind = (arr: any[]) => {
+      for (const n of arr) {
+        if (n.id === targetId) {
+          dfs(n);
+        } else if (Array.isArray(n.children) && n.children.length) {
+          walkFind(n.children);
+        }
+      }
+    };
+    walkFind(nodes);
+    return set;
+  };
+  const expandCategoryIds = (ids?: string[]) => {
+    if (!ids || !ids.length) return [] as string[];
+    const out = new Set<string>();
+    for (const id of ids) {
+      for (const did of collectDescendants(categoriesTree, id)) out.add(did);
+    }
+    return Array.from(out);
+  };
+  const hasAncestor = (nodes: any[], id: string, selected: Set<string>): boolean => {
+    // build parent map once
+    const parent = new Map<string, string | null>();
+    const build = (arr: any[], p: string | null) => {
+      for (const n of arr) {
+        parent.set(n.id, p);
+        if (Array.isArray(n.children) && n.children.length) build(n.children, n.id);
+      }
+    };
+    build(nodes, null);
+    let cur = parent.get(id) || null;
+    while (cur) {
+      if (selected.has(cur)) return true;
+      cur = parent.get(cur) || null;
+    }
+    return false;
+  };
+  const compressCategoryIds = (ids?: string[]) => {
+    if (!ids || !ids.length) return [] as string[];
+    const set = new Set(ids);
+    return ids.filter((id) => !hasAncestor(categoriesTree, id, set));
+  };
+
+  const activeFilterChips = useMemo(() => {
+    const chips: Array<{ label: string; onClear: () => void }> = [];
+    const displayCategoryIds = compressCategoryIds(filters.categoryIds || []);
+    if (displayCategoryIds.length) {
+      for (const id of displayCategoryIds) {
+        const label = catMap.get(id) || "Category";
+        chips.push({ label, onClear: () => handleFilterChange({ categoryIds: (filters.categoryIds || []).filter((x) => x !== id) }) });
+      }
+    }
+    if (filters.minPrice) chips.push({ label: `Min $${filters.minPrice}`, onClear: () => handleFilterChange({ minPrice: undefined }) });
+    if (filters.maxPrice) chips.push({ label: `Max $${filters.maxPrice}`, onClear: () => handleFilterChange({ maxPrice: undefined }) });
+    if (filters.minRating) chips.push({ label: `${filters.minRating}+ stars`, onClear: () => handleFilterChange({ minRating: undefined }) });
+    if (filters.inStock) chips.push({ label: "In stock", onClear: () => handleFilterChange({ inStock: false }) });
+    if (filters.onSale) chips.push({ label: "On sale", onClear: () => handleFilterChange({ onSale: false }) });
+    if (filters.search) chips.push({ label: `Search: ${filters.search}`, onClear: () => handleFilterChange({ search: undefined }) });
+    return chips;
+  }, [filters, catMap]);
+
+  const [density, setDensity] = useState<"comfortable" | "compact">("comfortable");
+
+  return (
+    <div className="py-8">
+      <CategoryRail
+        activeCategoryId={(filters.categoryIds && filters.categoryIds.length === 1) ? filters.categoryIds[0] : undefined}
+        onSelect={(categoryId) => {
+          if (!categoryId) return handleFilterChange({ categoryIds: undefined });
+          // Keep minimal parent-only in state
+          handleFilterChange({ categoryIds: [categoryId] });
+        }}
+      />
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold tracking-tight mb-2">All Products</h1>
+        <p className="text-muted-foreground">
+          Discover our complete collection
+        </p>
+      </div>
+
+      {/* Mobile Filters Drawer */}
+      <Sheet open={showMobileFilters} onOpenChange={setShowMobileFilters}>
+        <SheetContent side="left" className="w-[90vw] sm:w-[420px] p-0">
+          <SheetHeader className="p-4 border-b">
+            <SheetTitle>Filters</SheetTitle>
+          </SheetHeader>
+          <div className="p-4 overflow-y-auto h-[calc(100dvh-140px)]">
+            <FilterSidebar
+              filters={{ ...pendingFilters, categoryIds: expandCategoryIds(pendingFilters.categoryIds) }}
+              onFilterChange={(f: any) =>
+                setPendingFilters((prev) => {
+                  const next = { ...prev, ...f } as any;
+                  if (Array.isArray(next.categoryIds)) {
+                    next.categoryIds = compressCategoryIds(next.categoryIds);
+                  }
+                  return next;
+                })
+              }
+            />
+          </div>
+          <SheetFooter className="p-4 border-t grid grid-cols-2 gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setPendingFilters({
+                  page: 1,
+                  limit: 12,
+                  sortBy: "newest",
+                  minPrice: undefined,
+                  maxPrice: undefined,
+                  minRating: undefined,
+                  categoryIds: undefined,
+                  inStock: false,
+                  onSale: false,
+                  isFeatured: false,
+                  search: undefined,
+                });
+              }}
+            >
+              Clear
+            </Button>
+            <Button
+              onClick={() => {
+                handleFilterChange({
+                  minPrice: pendingFilters.minPrice,
+                  maxPrice: pendingFilters.maxPrice,
+                  minRating: pendingFilters.minRating,
+                  categoryIds: pendingFilters.categoryIds,
+                  inStock: pendingFilters.inStock,
+                  onSale: pendingFilters.onSale,
+                  isFeatured: pendingFilters.isFeatured,
+                  search: pendingFilters.search,
+                });
+                setShowMobileFilters(false);
+              }}
+            >
+              Apply
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+
+      {/* Toolbar */}
+      <div className="mb-3 mt-4">
+        {/* Mobile toolbar */}
+        <div className="sm:hidden space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setPendingFilters(filters);
+                setShowMobileFilters(true);
+              }}
+            >
+              <Filter className="mr-2 h-4 w-4" />
+              Filters
+            </Button>
+
+            <div className="flex items-center gap-2">
+              <Select value={filters.sortBy} onValueChange={handleSortChange}>
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="newest">Newest</SelectItem>
+                  <SelectItem value="price_asc">Price: Low to High</SelectItem>
+                  <SelectItem value="price_desc">Price: High to Low</SelectItem>
+                  <SelectItem value="name">Name</SelectItem>
+                  <SelectItem value="rating">Rating</SelectItem>
+                  <SelectItem value="popular">Popular</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {data && (
+            <p className="text-sm text-muted-foreground">
+              Showing {data.items.length} of {data.total} products
+            </p>
+          )}
+
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearFilters}
+              className="text-muted-foreground px-0"
+            >
+              <X className="mr-2 h-4 w-4" />
+              Clear filters
+            </Button>
+          )}
+        </div>
+
+        {/* Desktop/Tablet toolbar */}
+        <div className="hidden sm:flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="lg:hidden"
+              onClick={() => {
+                setPendingFilters(filters);
+                setShowMobileFilters(true);
+              }}
+            >
+              <Filter className="mr-2 h-4 w-4" />
+              Filters
+            </Button>
+
+            <div className="flex items-center gap-2 ml-auto">
+              <span className="text-sm text-muted-foreground hidden sm:inline">
+                Sort by:
+              </span>
+              <Select value={filters.sortBy} onValueChange={handleSortChange}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="newest">Newest</SelectItem>
+                  <SelectItem value="price_asc">Price: Low to High</SelectItem>
+                  <SelectItem value="price_desc">Price: High to Low</SelectItem>
+                  <SelectItem value="name">Name</SelectItem>
+                  <SelectItem value="rating">Rating</SelectItem>
+                  <SelectItem value="popular">Popular</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <div className="hidden lg:flex items-center gap-1 ml-2 rounded-md border p-1">
+                <Button
+                  variant={density === "comfortable" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setDensity("comfortable")}
+                >
+                  Comfortable
+                </Button>
+                <Button
+                  variant={density === "compact" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setDensity("compact")}
+                >
+                  Compact
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              {data && (
+                <p className="text-sm text-muted-foreground">
+                  Showing {data.items.length} of {data.total} products
+                </p>
+              )}
+
+              {hasActiveFilters && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearFilters}
+                  className="text-muted-foreground"
+                >
+                  <X className="mr-2 h-4 w-4" />
+                  Clear filters
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Active filter chips */}
+      {activeFilterChips.length > 0 && (
+        <div className="mb-6 flex flex-wrap items-center gap-2">
+          {activeFilterChips.map((chip, i) => (
+            <Button key={i} size="sm" variant="secondary" onClick={chip.onClear}>
+              {chip.label}
+              <X className="ml-2 h-4 w-4" />
+            </Button>
+          ))}
+        </div>
+      )}
+
+      {/* Main Content */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        {/* Sidebar Filters */}
+        <aside className="hidden lg:block">
+          <FilterSidebar
+            filters={{ ...filters, categoryIds: expandCategoryIds(filters.categoryIds) }}
+            onFilterChange={(f: any) => {
+              // Normalize to minimal parent-only selection
+              const minimal = { ...f };
+              if (Array.isArray(minimal.categoryIds)) {
+                minimal.categoryIds = compressCategoryIds(minimal.categoryIds);
+              }
+              handleFilterChange(minimal);
+            }}
+          />
+        </aside>
+
+        {/* Product Grid */}
+        <main className="lg:col-span-3">
+          {error && (
+            <div className="text-center py-12">
+              <p className="text-destructive">
+                Failed to load products. Please try again.
+              </p>
+            </div>
+          )}
+
+          <ProductGrid
+            products={data?.items || []}
+            isLoading={isLoading}
+            columns={density === "compact" ? 4 : 3}
+            density={density}
+          />
+
+          {/* Pagination */}
+          {data && data.hasMore && (
+            <div className="mt-8 text-center">
+              <Button
+                onClick={() =>
+                  setFilters((prev) => ({ ...prev, page: prev.page + 1 }))
+                }
+                disabled={isLoading}
+              >
+                Load More
+              </Button>
+            </div>
+          )}
+        </main>
+      </div>
+    </div>
+  );
+}
