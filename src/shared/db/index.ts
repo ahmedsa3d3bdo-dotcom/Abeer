@@ -43,7 +43,15 @@ const pool: Pool = (() => {
     // Ensure consistent timestamp behavior for timestamp columns without timezone.
     // node-postgres parses 'timestamp without time zone' as UTC.
     // Setting the session time zone to UTC prevents double-offset issues.
-    void client.query("SET TIME ZONE 'UTC'");
+    void client.query("SET TIME ZONE 'UTC'").catch(() => {});
+
+    client.on("error", (err) => {
+      console.error("Postgres client error:", err);
+    });
+  });
+
+  created.on("error", (err) => {
+    console.error("Postgres pool error:", err);
   });
 
   if (process.env.NODE_ENV !== "production") {
