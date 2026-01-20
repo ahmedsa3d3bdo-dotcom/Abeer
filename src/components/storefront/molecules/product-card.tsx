@@ -64,6 +64,7 @@ export function ProductCard({ product, className, onQuickView }: ProductCardProp
   };
 
   const handleWishlist = (e: React.MouseEvent) => {
+    e.preventDefault();
     e.stopPropagation();
     if (!requireAuth()) return;
     toggleWishlist(product);
@@ -105,8 +106,7 @@ export function ProductCard({ product, className, onQuickView }: ProductCardProp
   const discountPercent = hasDiscount ? Math.round(((product.compareAtPrice! - product.price) / product.compareAtPrice!) * 100) : 0;
 
   return (
-    <Link
-      href={`/product/${product.slug}`}
+    <div
       className={cn(
         "group relative block rounded-xl border border-border/50 bg-card overflow-hidden",
         "transition-all duration-500 ease-out",
@@ -117,6 +117,7 @@ export function ProductCard({ product, className, onQuickView }: ProductCardProp
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
+      <Link href={`/product/${product.slug}`} aria-label={product.name} className="absolute inset-0 z-10" />
       {/* Image Container */}
       <div className="relative aspect-square overflow-hidden bg-muted">
         {/* Hover Overlay */}
@@ -248,6 +249,6 @@ export function ProductCard({ product, className, onQuickView }: ProductCardProp
           showDiscountBadge={false}
         />
       </div>
-    </Link>
+    </div>
   );
 }
