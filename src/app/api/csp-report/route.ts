@@ -7,6 +7,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
+const g = globalThis as any;
+const LAST_CSP_LOG: Map<string, number> = g.__lastCspLog ?? new Map<string, number>();
+g.__lastCspLog = LAST_CSP_LOG;
+
 function normalizeIp(v: string | null) {
   if (!v) return undefined;
   const first = v.split(",")[0]?.trim();
@@ -19,6 +23,14 @@ export async function POST(request: NextRequest) {
 
     const forwarded = request.headers.get("x-forwarded-for");
     const ipAddress = normalizeIp(forwarded) || normalizeIp(request.headers.get("x-real-ip")) || undefined;
+
+    const key = ipAddress || "unknown";
+    const now = Date.now();
+    const last = LAST_CSP_LOG.get(key) || 0;
+    if (now - last < 60_000) {
+      return new NextResponse(null, { status: 204 });
+    }
+    LAST_CSP_LOG.set(key, now);
 
     await writeSystemLog({
       level: "warn",

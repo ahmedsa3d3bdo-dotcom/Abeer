@@ -31,6 +31,38 @@ function normalizeOrigin(v: string) {
   return String(v || "").trim().replace(/\/$/, "");
 }
 
+function originHost(v: string) {
+  try {
+    return new URL(v).host;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeAllowItem(v: string) {
+  const raw = String(v || "").trim();
+  if (!raw) return null;
+  const normalized = normalizeOrigin(raw);
+  const h = originHost(normalized);
+  if (h) return { kind: "origin" as const, value: normalized, host: h };
+  const hostOnly = raw.replace(/^\s*\[|\]\s*$/g, "").trim();
+  if (!hostOnly) return null;
+  return { kind: "host" as const, value: hostOnly.toLowerCase(), host: hostOnly.toLowerCase() };
+}
+
+function isAllowedByList(normalizedOrigin: string, allowList: string[]) {
+  const originH = originHost(normalizedOrigin);
+  const parsed = allowList.map(normalizeAllowItem).filter(Boolean) as Array<{ kind: "origin" | "host"; value: string; host: string }>;
+  for (const item of parsed) {
+    if (item.kind === "origin") {
+      if (item.value === normalizedOrigin) return true;
+    } else {
+      if (originH && originH.toLowerCase() === item.host) return true;
+    }
+  }
+  return false;
+}
+
 function extractOriginFromReferer(referer: string) {
   try {
     const u = new URL(referer);
@@ -105,7 +137,7 @@ export async function enforceSecurity(request: NextRequest, target: SecurityTarg
         : [];
 
       const fallback = normalizeOrigin(requestOriginFromHeaders(request));
-      const allowed = allowList.length ? allowList.includes(normalized) : sameOriginOrLoopbackEquivalent(normalized, fallback);
+      const allowed = allowList.length ? isAllowedByList(normalized, allowList) : sameOriginOrLoopbackEquivalent(normalized, fallback);
 
       if (!allowed) {
         await writeAudit({
