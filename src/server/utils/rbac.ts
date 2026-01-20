@@ -9,9 +9,30 @@ export async function requirePermission(request: Request, permission: string) {
     if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
       const origin = String(request.headers.get('origin') || '').trim().replace(/\/$/, '');
       if (origin) {
-        const reqOrigin = new URL((request as any).url).origin.replace(/\/$/, '');
+        const url = new URL((request as any).url);
+        const xfProtoRaw = String(request.headers.get("x-forwarded-proto") || "");
+        const xfHostRaw = String(request.headers.get("x-forwarded-host") || "");
+        const forwardedProto = xfProtoRaw.split(",")[0]?.trim();
+        const forwardedHost = xfHostRaw.split(",")[0]?.trim();
+        const reqProto = forwardedProto || url.protocol.replace(/:$/, "");
+        const reqHost = forwardedHost || String(request.headers.get("host") || url.host);
+        const reqOrigin = `${reqProto}://${reqHost}`.replace(/\/$/, "");
+
         if (origin !== reqOrigin) {
-          throw new ForbiddenError('Cross-site request blocked');
+          // Common reverse-proxy case: browser is https:// but upstream request is http://
+          // when x-forwarded-proto is not correctly forwarded. Allow if host matches.
+          try {
+            const o = new URL(origin);
+            const r = new URL(reqOrigin);
+            const sameHost = o.host === r.host;
+            const protoMismatchIsProxy = o.protocol === "https:" && r.protocol === "http:";
+            if (!(sameHost && protoMismatchIsProxy)) {
+              throw new ForbiddenError("Cross-site request blocked");
+            }
+            // Allowed proxy mismatch (https browser -> http upstream)
+          } catch {
+            throw new ForbiddenError("Cross-site request blocked");
+          }
         }
       }
     }

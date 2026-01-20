@@ -19,6 +19,7 @@
 # misc
 .DS_Store
 *.pem
+/backups/*.dump
 *.sh
 *.log
 npm-debug.log*

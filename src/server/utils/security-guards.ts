@@ -10,6 +10,17 @@ type SecurityTarget = "contact" | "newsletter" | "login" | "register" | "reviews
 
 type OriginScope = "publicForms" | "auth" | "reviews";
 
+function requestOriginFromHeaders(request: NextRequest) {
+  const url = request.nextUrl;
+  const xfProtoRaw = String(request.headers.get("x-forwarded-proto") || "");
+  const xfHostRaw = String(request.headers.get("x-forwarded-host") || "");
+  const forwardedProto = xfProtoRaw.split(",")[0]?.trim();
+  const forwardedHost = xfHostRaw.split(",")[0]?.trim();
+  const proto = forwardedProto || url.protocol.replace(/:$/, "");
+  const host = forwardedHost || String(request.headers.get("host") || url.host);
+  return `${proto}://${host}`;
+}
+
 function getClientIp(request: NextRequest) {
   const forwarded = request.headers.get("x-forwarded-for");
   const ip = forwarded ? forwarded.split(",")[0]?.trim() : request.headers.get("x-real-ip") || "unknown";
@@ -93,7 +104,7 @@ export async function enforceSecurity(request: NextRequest, target: SecurityTarg
         ? settings.originCheck.allowedOrigins.map(normalizeOrigin).filter(Boolean)
         : [];
 
-      const fallback = normalizeOrigin(request.nextUrl.origin);
+      const fallback = normalizeOrigin(requestOriginFromHeaders(request));
       const allowed = allowList.length ? allowList.includes(normalized) : sameOriginOrLoopbackEquivalent(normalized, fallback);
 
       if (!allowed) {
