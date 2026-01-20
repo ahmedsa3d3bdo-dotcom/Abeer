@@ -31,7 +31,7 @@ export function ProductCard({ product, className, onQuickView }: ProductCardProp
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imgSrc, setImgSrc] = useState<string>(product.primaryImage || "/placeholder-product.svg");
   const addItem = useCartStore((state) => state.addItem);
-  const isLoading = useCartStore((state) => state.isLoading);
+  const [isAdding, setIsAdding] = useState(false);
   const [isBuying, setIsBuying] = useState(false);
   const toggleWishlist = useWishlistStore((state) => state.toggleItem);
   const isInWishlist = useWishlistStore((state) => state.isInWishlist(product.id));
@@ -60,7 +60,12 @@ export function ProductCard({ product, className, onQuickView }: ProductCardProp
     e.preventDefault();
     e.stopPropagation();
     if (!requireAuth()) return;
-    await addItem(product.id, undefined, 1);
+    try {
+      setIsAdding(true);
+      await addItem(product.id, undefined, 1);
+    } finally {
+      setIsAdding(false);
+    }
   };
 
   const handleWishlist = (e: React.MouseEvent) => {
@@ -187,7 +192,7 @@ export function ProductCard({ product, className, onQuickView }: ProductCardProp
               variant="secondary"
               className="h-8 w-8 rounded-full shadow-md md:hidden"
               onClick={handleAddToCart}
-              disabled={isLoading}
+              disabled={isAdding}
             >
               <ShoppingCart className="h-4 w-4" />
               <span className="sr-only">Add to cart</span>
@@ -207,10 +212,10 @@ export function ProductCard({ product, className, onQuickView }: ProductCardProp
               <Button
                 className="shadow-md"
                 onClick={handleAddToCart}
-                disabled={isLoading}
+                disabled={isAdding}
               >
                 <ShoppingCart className="mr-2 h-4 w-4" />
-                {isLoading ? "Adding..." : "Add"}
+                {isAdding ? "Adding..." : "Add"}
               </Button>
               <Button
                 variant="outline"
