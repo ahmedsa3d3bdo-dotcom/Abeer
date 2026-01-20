@@ -132,22 +132,24 @@ export async function POST(
     try {
       const shortId = String(created.id).split("-")[0];
       const productLabel = productName ? String(productName) : "a product";
-      await notificationsService.sendToRoles(
-        {
-          roleSlugs: ["super_admin", "admin"],
-          type: "product_review" as any,
-          title: `New review: ${productLabel} (${shortId})`,
-          message: `New review submitted for ${productLabel} (rating ${rating}/5).`,
-          actionUrl: "/dashboard/reviews",
-          metadata: {
-            entity: "review",
-            entityId: created.id,
-            productId,
-            productName: productName || undefined,
+      void notificationsService
+        .sendToRoles(
+          {
+            roleSlugs: ["super_admin", "admin"],
+            type: "product_review" as any,
+            title: `New review: ${productLabel} (${shortId})`,
+            message: `New review submitted for ${productLabel} (rating ${rating}/5).`,
+            actionUrl: "/dashboard/reviews",
+            metadata: {
+              entity: "review",
+              entityId: created.id,
+              productId,
+              productName: productName || undefined,
+            },
           },
-        },
-        { userId: userId || undefined },
-      );
+          { userId: userId || undefined },
+        )
+        .catch(() => {});
     } catch {}
 
     return NextResponse.json({ success: true, data: { id: created.id } }, { status: 201 });
