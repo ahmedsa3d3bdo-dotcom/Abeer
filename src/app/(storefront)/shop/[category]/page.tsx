@@ -17,11 +17,12 @@ export default async function CategoryPage({
   }
 
   const qs = new URLSearchParams();
-  qs.set("categoryId", category.id);
+  qs.set("categorySlug", category.slug);
 
   for (const [k, v] of Object.entries(sp || {})) {
     if (v === undefined) continue;
     if (k === "categoryId") continue;
+    if (k === "categorySlug") continue;
     if (Array.isArray(v)) {
       for (const vv of v) {
         if (vv !== undefined) qs.append(k, String(vv));

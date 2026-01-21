@@ -49,7 +49,6 @@ export default function ShopPage() {
     const inStock = sp.get("inStock") === "true";
     const onSale = sp.get("onSale") === "true";
     const isFeatured = sp.get("isFeatured") === "true";
-    const categoryIds = sp.getAll("categoryId");
     const q = sp.get("q") || sp.get("search") || undefined;
     return {
       page: Number.isNaN(page) ? 1 : page,
@@ -62,28 +61,58 @@ export default function ShopPage() {
       onSale,
       isFeatured,
       search: q || undefined,
-      categoryIds: categoryIds.length ? categoryIds : undefined,
     };
   };
 
-  // Initialize filters from URL on first mount
-  useEffect(() => {
-    if (initedRef.current) return;
-    const next = parseFiltersFromSearchParams(searchParams);
-    setFilters((prev) => ({ ...prev, ...next }));
-    lastUrlSyncedRef.current = searchParams.toString();
-    initedRef.current = true;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const categoriesDataQuery = useQuery<{ categories: Array<{ id: string; name: string; slug: string; children?: any[] }> }>({
+    queryKey: ["categories"],
+    queryFn: () => api.get("/api/storefront/categories"),
+  });
 
+  const categoriesTree: any[] = useMemo(
+    () => (categoriesDataQuery.data as any)?.data?.categories || categoriesDataQuery.data?.categories || [],
+    [categoriesDataQuery.data],
+  );
+
+  const categoryIndex = useMemo(() => {
+    const idToSlug = new Map<string, string>();
+    const slugToId = new Map<string, string>();
+    const walk = (nodes: any[]) => {
+      for (const n of nodes || []) {
+        if (n?.id && n?.slug) {
+          idToSlug.set(String(n.id), String(n.slug));
+          slugToId.set(String(n.slug), String(n.id));
+        }
+        if (Array.isArray(n.children) && n.children.length) walk(n.children);
+      }
+    };
+    walk(categoriesTree);
+    return { idToSlug, slugToId };
+  }, [categoriesTree]);
+
+  const resolveCategoryIdsFromSearchParams = (sp: ReadonlyURLSearchParams) => {
+    const slugs = sp.getAll("categorySlug").filter(Boolean);
+    if (slugs.length && categoryIndex.slugToId.size) {
+      const ids = slugs
+        .map((s) => categoryIndex.slugToId.get(String(s)) || "")
+        .filter(Boolean);
+      return ids.length ? ids : undefined;
+    }
+    const ids = sp.getAll("categoryId").filter(Boolean);
+    return ids.length ? ids : undefined;
+  };
+
+  // Initialize + keep in sync with URL (including resolving categorySlug -> categoryId)
   useEffect(() => {
-    if (!initedRef.current) return;
     const qs = searchParams.toString();
-    if (qs === lastUrlSyncedRef.current) return;
-    lastUrlSyncedRef.current = qs;
+    const syncKey = `${qs}|${categoryIndex.slugToId.size}`;
+    if (initedRef.current && syncKey === lastUrlSyncedRef.current) return;
+    lastUrlSyncedRef.current = syncKey;
     const next = parseFiltersFromSearchParams(searchParams);
-    setFilters((prev) => ({ ...prev, ...next }));
-  }, [searchParams]);
+    const categoryIds = resolveCategoryIdsFromSearchParams(searchParams);
+    setFilters((prev) => ({ ...prev, ...next, categoryIds }));
+    initedRef.current = true;
+  }, [searchParams, categoryIndex.slugToId]);
 
   // Update URL when filters change (shallow) with guard to avoid loops
   const lastQsRef = useRef<string | null>(null);
@@ -101,8 +130,16 @@ export default function ShopPage() {
     if (filters.isFeatured) params.set("isFeatured", "true");
     if (filters.search) params.set("q", filters.search);
     if (filters.categoryIds && filters.categoryIds.length) {
-      const sorted = [...filters.categoryIds].sort();
-      for (const id of sorted) params.append("categoryId", id);
+      const slugs = filters.categoryIds
+        .map((id) => categoryIndex.idToSlug.get(id) || "")
+        .filter(Boolean)
+        .sort();
+      if (slugs.length === filters.categoryIds.length) {
+        for (const slug of slugs) params.append("categorySlug", slug);
+      } else {
+        const sorted = [...filters.categoryIds].sort();
+        for (const id of sorted) params.append("categoryId", id);
+      }
     }
     const qs = params.toString();
     if (qs === lastQsRef.current) return;
@@ -188,14 +225,10 @@ export default function ShopPage() {
     filters.isFeatured ||
     !!filters.search;
 
-  // Fetch categories for chip labels
-  const { data: categoriesData } = useQuery<{ categories: Array<{ id: string; name: string; children?: any[] }> }>({
-    queryKey: ["categories"],
-    queryFn: () => api.get("/api/storefront/categories"),
-  });
+  // Chip labels
   const catMap = useMemo(() => {
     const map = new Map<string, string>();
-    const cats = (categoriesData as any)?.data?.categories || categoriesData?.categories || [];
+    const cats = categoriesTree;
     const walk = (nodes: any[]) => {
       for (const n of nodes) {
         map.set(n.id, n.name);
@@ -204,10 +237,9 @@ export default function ShopPage() {
     };
     walk(cats);
     return map;
-  }, [categoriesData]);
+  }, [categoriesTree]);
 
   // Helpers to work with category trees (expand/compress)
-  const categoriesTree: any[] = useMemo(() => (categoriesData as any)?.data?.categories || categoriesData?.categories || [], [categoriesData]);
   const collectDescendants = (nodes: any[], targetId: string): Set<string> => {
     const set = new Set<string>();
     const dfs = (n: any) => {

@@ -64,7 +64,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     { label: "Home", href: "/" },
     { label: "Shop", href: "/shop" },
     ...(product.categories && product.categories.length > 0
-      ? [{ label: product.categories[0].name, href: `/shop?categoryId=${product.categories[0].id}` }]
+      ? [{ label: product.categories[0].name, href: `/shop?categorySlug=${encodeURIComponent(product.categories[0].slug)}` }]
       : []),
     { label: product.name, href: `/product/${slug}` },
   ];

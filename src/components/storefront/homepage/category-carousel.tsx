@@ -9,7 +9,7 @@ interface Category {
     id: string;
     name: string;
     slug: string;
-    image: string | null | undefined;
+    image?: string | null;
     productCount?: number;
 }
 
@@ -247,7 +247,7 @@ export function CategoryCarousel({ categories: initialCategories }: CategoryCaro
                     {categories.map((category, index) => (
                         <Link
                             key={category.id}
-                            href={`/shop?categoryId=${category.id}`}
+                            href={`/shop?categorySlug=${encodeURIComponent(category.slug)}`}
                             onClick={(e) => {
                                 // Prevent navigation if we were just dragging
                                 if (isDragging) {

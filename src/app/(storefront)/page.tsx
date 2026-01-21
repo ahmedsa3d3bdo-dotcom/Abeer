@@ -1,6 +1,7 @@
 import { HeroSection } from "@/components/storefront/homepage/hero-section";
 import { FeaturedProducts } from "@/components/storefront/homepage/featured-products";
 import { CategoryCarousel } from "@/components/storefront/homepage/category-carousel";
+import { SubcategoryCarousel } from "@/components/storefront/homepage/subcategory-carousel";
 import { FashionVideoSection } from "@/components/storefront/homepage/fashion-video";
 import { TrendingProducts } from "@/components/storefront/homepage/trending-products";
 import { ReviewsSection } from "@/components/storefront/homepage/reviews-section";
@@ -15,9 +16,9 @@ import { siteConfig } from "@/config/site";
 
 export const revalidate = 60; // ISR: Revalidate every 60 seconds
 
-async function getCategories() {
+async function getCategoriesTree() {
   try {
-    return await storefrontCategoriesService.getTopLevel(12);
+    return await storefrontCategoriesService.getTree();
   } catch (error) {
     console.error("Error fetching categories:", error);
     return [];
@@ -26,7 +27,8 @@ async function getCategories() {
 
 export default async function HomePage() {
   const siteName = (await settingsRepository.findByKey("site_name"))?.value || siteConfig.name || "";
-  const categories = await getCategories();
+  const categoriesTree = await getCategoriesTree();
+  const topLevelCategories = categoriesTree.slice(0, 12);
 
   return (
     <div className="flex flex-col">
@@ -34,7 +36,10 @@ export default async function HomePage() {
       <HeroSection />
 
       {/* Category Carousel - Right after hero for immediate discovery */}
-      <CategoryCarousel categories={categories} />
+      <CategoryCarousel categories={topLevelCategories} />
+
+      {/* Subcategory Carousel - deeper browsing right after top categories */}
+      <SubcategoryCarousel categories={categoriesTree} />
 
       {/* Seasonal Offers Banner */}
       <AnimatedSection animation="fade-up" delay={100}>

@@ -34,7 +34,8 @@ export function CategoryRail({ activeCategoryId, onSelect }: CategoryRailProps) 
       router.push("/shop");
       return;
     }
-    router.push(`/shop?categoryId=${encodeURIComponent(categoryId)}`);
+    const slug = items.find((x) => x.id === categoryId)?.slug;
+    router.push(slug ? `/shop?categorySlug=${encodeURIComponent(slug)}` : "/shop");
   };
 
   return (

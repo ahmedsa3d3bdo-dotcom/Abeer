@@ -133,7 +133,7 @@ export function MegaMenu({ open, onClose }: MegaMenuProps) {
                   {col.map((c: any) => (
                     <Link
                       key={c.id}
-                      href={`/shop?categoryId=${c.id}`}
+                      href={`/shop?categorySlug=${encodeURIComponent(c.slug)}`}
                       className="flex items-center gap-2 rounded px-2 py-2 text-sm hover:bg-muted"
                       onClick={onClose}
                     >

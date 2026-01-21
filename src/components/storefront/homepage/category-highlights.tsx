@@ -42,7 +42,7 @@ export async function CategoryHighlights() {
           return (
             <Link
               key={category.id}
-              href={`/shop?categoryId=${category.id}`}
+              href={`/shop?categorySlug=${encodeURIComponent(category.slug)}`}
               className={`group relative overflow-hidden rounded-xl border ring-1 ring-border bg-card hover:shadow-lg transition-all ${span}`}
             >
               <div className="absolute inset-0">

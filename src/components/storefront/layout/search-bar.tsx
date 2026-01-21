@@ -26,15 +26,12 @@ export function SearchBar({ onClose }: SearchBarProps) {
   const [focused, setFocused] = useState(false);
 
   const inCategorySlug = useMemo(() => {
+    const qp = searchParams.get("categorySlug") || "";
+    if (qp && !qp.includes("/")) return qp;
     const m = pathname.match(/^\/shop\/(.+)/);
     if (m && !m[1].includes("/")) return m[1];
     return undefined;
-  }, [pathname]);
-
-  const inCategoryId = useMemo(() => {
-    const id = searchParams.get("categoryId");
-    return id || undefined;
-  }, [searchParams]);
+  }, [pathname, searchParams]);
 
   useEffect(() => {
     try {
@@ -52,7 +49,7 @@ export function SearchBar({ onClose }: SearchBarProps) {
       if (!q) {
         // Load just categories and popular queries when empty
         try {
-          const res = await fetch(`/api/storefront/search/suggestions?limit=6${inCategoryId ? `&categoryId=${encodeURIComponent(inCategoryId)}` : ""}`, { signal: controller.signal });
+          const res = await fetch(`/api/storefront/search/suggestions?limit=6${inCategorySlug ? `&categorySlug=${encodeURIComponent(inCategorySlug)}` : ""}`, { signal: controller.signal });
           const data = await res.json();
           if (data?.success) setSuggestions(data.data);
           setOpen(true);
@@ -61,7 +58,7 @@ export function SearchBar({ onClose }: SearchBarProps) {
         return;
       }
       try {
-        const res = await fetch(`/api/storefront/search/suggestions?q=${encodeURIComponent(q)}&limit=6${inCategoryId ? `&categoryId=${encodeURIComponent(inCategoryId)}` : ""}`, { signal: controller.signal });
+        const res = await fetch(`/api/storefront/search/suggestions?q=${encodeURIComponent(q)}&limit=6${inCategorySlug ? `&categorySlug=${encodeURIComponent(inCategorySlug)}` : ""}`, { signal: controller.signal });
         const data = await res.json();
         if (data?.success) setSuggestions(data.data);
         setOpen(true);
@@ -70,7 +67,7 @@ export function SearchBar({ onClose }: SearchBarProps) {
     };
     run();
     return () => controller.abort();
-  }, [debouncedQuery, inCategoryId, focused]);
+  }, [debouncedQuery, inCategorySlug, focused]);
 
   // Close on outside click
   useEffect(() => {
@@ -131,8 +128,8 @@ export function SearchBar({ onClose }: SearchBarProps) {
     if (!q) return;
     saveRecent(q);
     // Prefer category context if present
-    const to = inCategoryId
-      ? `/shop?categoryId=${encodeURIComponent(inCategoryId)}&q=${encodeURIComponent(q)}`
+    const to = inCategorySlug
+      ? `/shop?categorySlug=${encodeURIComponent(inCategorySlug)}&q=${encodeURIComponent(q)}`
       : `/shop?q=${encodeURIComponent(q)}`;
     trackAnalytics("submit", { q });
     router.push(to);
@@ -203,8 +200,8 @@ export function SearchBar({ onClose }: SearchBarProps) {
       trackAnalytics("click_category", { q, id: it.value.id });
       router.push(
         q
-          ? `/shop?categoryId=${encodeURIComponent(it.value.id)}&q=${encodeURIComponent(q)}`
-          : `/shop?categoryId=${encodeURIComponent(it.value.id)}`
+          ? `/shop?categorySlug=${encodeURIComponent(it.value.slug)}&q=${encodeURIComponent(q)}`
+          : `/shop?categorySlug=${encodeURIComponent(it.value.slug)}`
       );
       setOpen(false);
       onClose?.();
@@ -214,8 +211,8 @@ export function SearchBar({ onClose }: SearchBarProps) {
     if (q) {
       saveRecent(q);
       trackAnalytics("click_search", { q });
-      const to = inCategoryId
-        ? `/shop?categoryId=${encodeURIComponent(inCategoryId)}&q=${encodeURIComponent(q)}`
+      const to = inCategorySlug
+        ? `/shop?categorySlug=${encodeURIComponent(inCategorySlug)}&q=${encodeURIComponent(q)}`
         : `/shop?q=${encodeURIComponent(q)}`;
       router.push(to);
       setOpen(false);
