@@ -261,6 +261,9 @@ export function SubcategoryCarousel({
                     alt={it.name}
                     fill
                     className="object-cover transition-transform duration-700 group-hover/sub:scale-110"
+                    quality={60}
+                    loading="lazy"
+                    fetchPriority="low"
                     sizes="(max-width: 640px) 70vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
                     draggable={false}
                   />

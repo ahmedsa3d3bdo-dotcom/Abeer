@@ -68,42 +68,42 @@ export default async function HomePage() {
       <SubcategoryCarousel categories={categoriesTree} />
 
       {/* Seasonal Offers Banner */}
-      <AnimatedSection animation="fade-up" delay={100}>
+      <AnimatedSection animation="fade-up" delay={100} defer>
         <SeasonalOffersBanner offers={seasonalOffers} />
       </AnimatedSection>
 
       {/* Featured Products */}
-      <AnimatedSection animation="fade-up" delay={0}>
+      <AnimatedSection animation="fade-up" delay={0} defer>
         <FeaturedProducts />
       </AnimatedSection>
 
       {/* Trending Products */}
-      <AnimatedSection animation="fade-up" delay={0}>
+      <AnimatedSection animation="fade-up" delay={0} defer>
         <TrendingProducts />
       </AnimatedSection>
 
       {/* Fashion Video Section */}
-      <AnimatedSection animation="zoom-in" delay={0}>
+      <AnimatedSection animation="zoom-in" delay={0} defer>
         <FashionVideoSection />
       </AnimatedSection>
 
       {/* Recently Viewed */}
-      <AnimatedSection animation="fade-up" delay={0}>
+      <AnimatedSection animation="fade-up" delay={0} defer>
         <RecentlyViewedCarousel />
       </AnimatedSection>
 
       {/* Personalized Recommendations */}
-      <AnimatedSection animation="fade-up" delay={0}>
+      <AnimatedSection animation="fade-up" delay={0} defer>
         <RecommendationsRail context="user" title="For you" limit={6} />
       </AnimatedSection>
 
       {/* Reviews Section */}
-      <AnimatedSection animation="fade-up" delay={0}>
+      <AnimatedSection animation="fade-up" delay={0} defer>
         <ReviewsSection />
       </AnimatedSection>
 
       {/* Newsletter Section */}
-      <AnimatedSection animation="scale-in" delay={0}>
+      <AnimatedSection animation="scale-in" delay={0} defer>
         <NewsletterSection />
       </AnimatedSection>
     </div>

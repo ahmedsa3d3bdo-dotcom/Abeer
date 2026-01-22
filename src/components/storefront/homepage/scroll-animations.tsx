@@ -233,6 +233,7 @@ interface AnimatedSectionProps {
     animation?: AnimationType;
     delay?: number;
     as?: "section" | "div" | "article";
+    defer?: boolean;
 }
 
 export function AnimatedSection({
@@ -242,6 +243,7 @@ export function AnimatedSection({
     animation = "fade-up",
     delay = 0,
     as: Component = "section",
+    defer = false,
 }: AnimatedSectionProps) {
     const ref = useRef<HTMLElement>(null);
     const [isVisible, setIsVisible] = useState(false);
@@ -276,7 +278,7 @@ export function AnimatedSection({
             )}
             style={{ transitionDelay: `${delay}ms` }}
         >
-            {children}
+            {defer && !isVisible ? null : children}
         </Component>
     );
 }
