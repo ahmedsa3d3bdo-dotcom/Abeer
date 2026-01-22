@@ -45,6 +45,7 @@ const DASHBOARD_ROUTE_PERMS: Array<{ prefix: string; perm: string }> = [
   { prefix: "/dashboard/security", perm: "security.view" },
   { prefix: "/dashboard/audit-logs", perm: "audit.view" },
   { prefix: "/dashboard/system/logs", perm: "system.logs.view" },
+  { prefix: "/dashboard/system/metrics", perm: "system.metrics.view" },
   { prefix: "/dashboard/backups", perm: "backups.view" },
   { prefix: "/dashboard/health", perm: "health.view" },
   { prefix: "/dashboard/support/messages", perm: "support.view" },

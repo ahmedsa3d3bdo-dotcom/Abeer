@@ -131,6 +131,8 @@ export const PERMISSIONS_DATA = [
   { resource: "security", action: "manage", name: "Manage Security", slug: "security.manage" },
   { resource: "system", action: "logs.view", name: "View System Logs", slug: "system.logs.view" },
   { resource: "system", action: "logs.manage", name: "Manage System Logs", slug: "system.logs.manage" },
+  { resource: "system", action: "metrics.view", name: "View System Metrics", slug: "system.metrics.view" },
+  { resource: "system", action: "metrics.manage", name: "Manage System Metrics", slug: "system.metrics.manage" },
 ];
 
 export const STORIES_DATA = [

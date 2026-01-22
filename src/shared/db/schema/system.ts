@@ -1,4 +1,4 @@
-import { pgTable, varchar, text, timestamp, uuid, integer, jsonb, boolean, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, varchar, text, timestamp, uuid, integer, jsonb, boolean, index, uniqueIndex, bigint } from "drizzle-orm/pg-core";
 import { auditActionEnum, backupStatusEnum, healthCheckStatusEnum } from "../enums";
 import { users } from "./users";
 
@@ -19,6 +19,27 @@ export const systemSettings = pgTable(
   (table) => ({
     keyIdx: index("system_settings_key_idx").on(table.key),
     isPublicIdx: index("system_settings_is_public_idx").on(table.isPublic),
+  }),
+);
+
+export const systemMetricsSamples = pgTable(
+  "system_metrics_samples",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    cpuUsagePct: integer("cpu_usage_pct"),
+    memUsedBytes: bigint("mem_used_bytes", { mode: "number" }),
+    memTotalBytes: bigint("mem_total_bytes", { mode: "number" }),
+    diskUsedBytes: bigint("disk_used_bytes", { mode: "number" }),
+    diskTotalBytes: bigint("disk_total_bytes", { mode: "number" }),
+    netRxBytes: bigint("net_rx_bytes", { mode: "number" }),
+    netTxBytes: bigint("net_tx_bytes", { mode: "number" }),
+    netRxDeltaBytes: bigint("net_rx_delta_bytes", { mode: "number" }),
+    netTxDeltaBytes: bigint("net_tx_delta_bytes", { mode: "number" }),
+    sampleIntervalSec: integer("sample_interval_sec"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    createdAtIdx: index("system_metrics_samples_created_at_idx").on(table.createdAt),
   }),
 );
 

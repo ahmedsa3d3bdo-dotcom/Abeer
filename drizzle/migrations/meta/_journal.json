@@ -113,6 +113,13 @@
       "when": 1768822500000,
       "tag": "0015_add_reserved_quantity_to_product_variants",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1769000000000,
+      "tag": "0016_create_system_metrics_samples",
+      "breakpoints": true
     }
   ]
 }

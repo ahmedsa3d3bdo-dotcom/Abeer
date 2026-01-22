@@ -125,6 +125,7 @@ export function StorefrontHeader() {
       "security.view",
       "audit.view",
       "system.logs.view",
+      "system.metrics.view",
       "backups.view",
       "health.view",
       "support.view",

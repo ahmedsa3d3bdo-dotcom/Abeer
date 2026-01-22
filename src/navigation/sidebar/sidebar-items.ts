@@ -131,6 +131,7 @@ export const sidebarItems: NavGroup[] = [
       { title: "System Logs", url: "/dashboard/system/logs", icon: FileText, iconClassName: "text-slate-600", permission: "system.logs.view" },
       { title: "Backups", url: "/dashboard/backups", icon: Archive, iconClassName: "text-stone-500", permission: "backups.view" },
       { title: "Health", url: "/dashboard/health", icon: Activity, iconClassName: "text-green-500", permission: "health.view" },
+      { title: "Metrics", url: "/dashboard/system/metrics", icon: ChartBar, iconClassName: "text-blue-600", permission: "system.metrics.view" },
     ],
   },
 ];
