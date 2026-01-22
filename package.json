@@ -56,7 +56,6 @@
     "@vercel/analytics": "^1.5.0",
     "@vercel/speed-insights": "^1.2.0",
     "axios": "^1.13.1",
-    "bcrypt": "^5.1.1",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -73,7 +72,7 @@
     "next": "^16.0.7",
     "next-auth": "5.0.0-beta.30",
     "next-themes": "^0.4.6",
-    "nodemailer": "^7.0.10",
+    "nodemailer": "^7.0.12",
     "pg": "^8.16.3",
     "postgres": "^3.4.7",
     "radix-ui": "^1.4.3",
@@ -131,7 +130,11 @@
     "typescript-eslint": "^8.46.2"
   },
   "overrides": {
-    "tar": "^7.5.3",
+    "@auth/core": "0.41.1",
+    "next-auth": {
+      "@auth/core": "0.41.1"
+    },
+    "tar": "^7.5.4",
     "esbuild": "0.25.4",
     "@esbuild-kit/core-utils": {
       "esbuild": "0.25.4"

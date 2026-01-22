@@ -1,6 +1,6 @@
 import { db } from "../index";
 import * as schema from "../schema";
-import * as bcrypt from "bcrypt";
+import * as bcrypt from "bcryptjs";
 import * as dotenv from "dotenv";
 import { nanoid } from "nanoid";
 import { eq } from "drizzle-orm";
@@ -123,7 +123,7 @@ async function seed() {
     console.log("📝 Creating users...");
     const users: Array<{ id: string; email: string }> = [];
     for (const userData of USERS_DATA) {
-      const hashedPassword = await bcrypt.hash(userData.password, 10);
+      const hashedPassword = bcrypt.hashSync(userData.password, 10);
       const [user] = await db
         .insert(schema.users)
         .values({
