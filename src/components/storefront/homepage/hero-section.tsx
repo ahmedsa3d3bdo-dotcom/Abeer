@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Truck, Shield, RotateCcw, Award } from "lucide-react";
 
@@ -10,7 +11,7 @@ const HERO_IMAGES = [
   "/Storefront/images/abeershop_hero.png",
   "/Storefront/images/room-living.png",
   "/Storefront/images/room-office.png",
-  "/Storefront/images/room-living.png",
+  "/Storefront/images/room-bedroom.png",
   "/Storefront/images/home-2.jpg",
   "/Storefront/images/home-1.jpg",
 ];
@@ -78,21 +79,48 @@ function useInView() {
 
 export function HeroSection() {
   const [currentImage, setCurrentImage] = useState(0);
+  const [previousImage, setPreviousImage] = useState<number | null>(null);
+  const [isFading, setIsFading] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const { ref: statsRef, inView: statsInView } = useInView();
+
+  const imageCount = HERO_IMAGES.length;
+  const nextPrefetchIndex = (currentImage + 1) % imageCount;
+
+  const fadeStartRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fadeEndRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Image carousel - cycles through all images
   useEffect(() => {
     const imageCount = HERO_IMAGES.length;
-    console.log("Total images:", imageCount);
+
+    const startTransition = (fromIndex: number) => {
+      setPreviousImage(fromIndex);
+      setIsFading(false);
+
+      if (fadeStartRef.current) clearTimeout(fadeStartRef.current);
+      if (fadeEndRef.current) clearTimeout(fadeEndRef.current);
+
+      // If the next image is slow to load (or fails), don't keep the previous slide on top forever.
+      fadeStartRef.current = setTimeout(() => {
+        setIsFading(true);
+        if (fadeEndRef.current) clearTimeout(fadeEndRef.current);
+        fadeEndRef.current = setTimeout(() => setPreviousImage(null), 1020);
+      }, 1200);
+    };
+
     const timer = setInterval(() => {
       setCurrentImage((prev) => {
         const next = (prev + 1) % imageCount;
-        console.log("Switching to image:", next, "of", imageCount);
+        startTransition(prev);
         return next;
       });
     }, 6000);
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      if (fadeStartRef.current) clearTimeout(fadeStartRef.current);
+      if (fadeEndRef.current) clearTimeout(fadeEndRef.current);
+    };
   }, []);
 
   // Initial load animation
@@ -121,20 +149,60 @@ export function HeroSection() {
       >
         {/* Full-width Background Image with Carousel */}
         <div className="absolute inset-0">
-          {HERO_IMAGES.map((src, index) => (
-            <div
-              key={index}
-              className={`absolute inset-0 transition-opacity duration-1000 ${currentImage === index ? "opacity-100" : "opacity-0"
-                }`}
-            >
-              <img
-                src={src}
-                alt={`Premium home interior ${index + 1}`}
-                className="w-full h-full object-cover"
-                loading={index === 0 ? "eager" : "lazy"}
+          <Image
+            src={HERO_IMAGES[nextPrefetchIndex]}
+            alt=""
+            width={1920}
+            height={1080}
+            sizes="100vw"
+            className="absolute w-px h-px opacity-0 pointer-events-none"
+            aria-hidden
+          />
+          <div className="relative w-full h-full">
+            <div className="absolute inset-0">
+              <Image
+                key={currentImage}
+                src={HERO_IMAGES[currentImage]}
+                alt={`Premium home interior ${currentImage + 1}`}
+                fill
+                priority={currentImage === 0}
+                sizes="100vw"
+                className="object-cover"
+                onLoadingComplete={() => {
+                  if (previousImage === null) return;
+                  if (isFading) return;
+                  if (fadeStartRef.current) clearTimeout(fadeStartRef.current);
+                  setIsFading(true);
+                  if (fadeEndRef.current) clearTimeout(fadeEndRef.current);
+                  fadeEndRef.current = setTimeout(() => setPreviousImage(null), 1020);
+                }}
+                onError={() => {
+                  if (previousImage === null) return;
+                  if (isFading) return;
+                  if (fadeStartRef.current) clearTimeout(fadeStartRef.current);
+                  setIsFading(true);
+                  if (fadeEndRef.current) clearTimeout(fadeEndRef.current);
+                  fadeEndRef.current = setTimeout(() => setPreviousImage(null), 1020);
+                }}
               />
             </div>
-          ))}
+
+            {previousImage !== null ? (
+              <div
+                className={`absolute inset-0 transition-opacity duration-1000 ${isFading ? "opacity-0" : "opacity-100"}`}
+              >
+                <Image
+                  key={previousImage}
+                  src={HERO_IMAGES[previousImage]}
+                  alt={`Premium home interior ${previousImage + 1}`}
+                  fill
+                  priority={previousImage === 0}
+                  sizes="100vw"
+                  className="object-cover"
+                />
+              </div>
+            ) : null}
+          </div>
           {/* Dark overlay for text readability */}
           <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-black/30" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />

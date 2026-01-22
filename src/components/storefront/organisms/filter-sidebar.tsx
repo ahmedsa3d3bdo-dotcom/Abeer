@@ -11,6 +11,7 @@ import { Star } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface FilterSidebarProps {
   filters: {
@@ -33,7 +34,7 @@ export function FilterSidebar({ filters, onFilterChange }: FilterSidebarProps) {
   const [maxInput, setMaxInput] = useState<number | "">(filters.maxPrice ?? "");
 
   // Fetch categories
-  const { data: categoriesData } = useQuery<{
+  const { data: categoriesData, isLoading: isCategoriesLoading } = useQuery<{
     categories: Array<{
       id: string;
       name: string;
@@ -118,16 +119,27 @@ export function FilterSidebar({ filters, onFilterChange }: FilterSidebarProps) {
           <span className="font-medium">Categories</span>
           <Button variant="ghost" size="sm" onClick={(e) => { e.preventDefault(); onFilterChange({ categoryIds: undefined }); }}>Clear</Button>
         </summary>
-        <div className="mt-3 space-y-2">
-          {categories.map((category: any) => (
-            <CategoryNode
-              key={category.id}
-              node={category}
-              depth={0}
-              selectedIds={filters.categoryIds || []}
-              onToggle={handleNodeToggle}
-            />
-          ))}
+        <div className="mt-3 space-y-2 min-h-[280px]">
+          {isCategoriesLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 10 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <Skeleton className="h-4 w-4 rounded" />
+                  <Skeleton className="h-4 w-3/4" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            categories.map((category: any) => (
+              <CategoryNode
+                key={category.id}
+                node={category}
+                depth={0}
+                selectedIds={filters.categoryIds || []}
+                onToggle={handleNodeToggle}
+              />
+            ))
+          )}
         </div>
       </details>
 

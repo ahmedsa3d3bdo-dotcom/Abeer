@@ -6,6 +6,7 @@ export function FashionVideoSection() {
         <video
           src="/Storefront/fashonVideo.mp4"
           className="h-[300px] sm:h-[300px] md:h-[300px] lg:h-[500px] w-full object-cover"
+          preload="none"
           autoPlay
           loop
           muted

@@ -67,7 +67,7 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
           fill
           className="object-cover"
           priority
-          sizes="(max-width: 1024px) 100vw, 50vw"
+          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 70vw, 50vw"
         />
       </div>
     );
@@ -82,8 +82,8 @@ export function ProductGallery({ images, productName }: ProductGalleryProps) {
           alt={selectedImage.altText || productName}
           fill
           className="object-cover"
-          priority
-          sizes="(max-width: 1024px) 100vw, 50vw"
+          priority={selectedIndex === 0}
+          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 70vw, 50vw"
           unoptimized={shouldUnoptimize(mainImageSrc)}
           onError={() => setMainImageSrc("/placeholder-product.svg")}
         />

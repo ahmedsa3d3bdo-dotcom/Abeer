@@ -13,6 +13,9 @@ import { AnimatedSection } from "@/components/storefront/homepage/scroll-animati
 import { storefrontCategoriesService } from "@/server/storefront/services/categories.service";
 import { settingsRepository } from "@/server/repositories/settings.repository";
 import { siteConfig } from "@/config/site";
+import { db } from "@/shared/db";
+import * as schema from "@/shared/db/schema";
+import { sql } from "drizzle-orm";
 
 export const revalidate = 60; // ISR: Revalidate every 60 seconds
 
@@ -25,10 +28,33 @@ async function getCategoriesTree() {
   }
 }
 
+async function getSeasonalOffers() {
+  const now = new Date();
+  const rows = await db
+    .select({
+      id: schema.discounts.id,
+      name: schema.discounts.name,
+      type: schema.discounts.type,
+      value: schema.discounts.value,
+      scope: schema.discounts.scope,
+      startsAt: schema.discounts.startsAt,
+      endsAt: schema.discounts.endsAt,
+      metadata: schema.discounts.metadata,
+    })
+    .from(schema.discounts)
+    .where(
+      sql`${schema.discounts.isAutomatic} = true and ${schema.discounts.status} = 'active' and (${schema.discounts.startsAt} is null or ${schema.discounts.startsAt} <= ${now}) and (${schema.discounts.endsAt} is null or ${schema.discounts.endsAt} >= ${now})`
+    )
+    .orderBy(schema.discounts.startsAt as any);
+
+  return rows.filter((o: any) => o.startsAt || o.endsAt).slice(0, 4);
+}
+
 export default async function HomePage() {
   const siteName = (await settingsRepository.findByKey("site_name"))?.value || siteConfig.name || "";
   const categoriesTree = await getCategoriesTree();
   const topLevelCategories = categoriesTree.slice(0, 12);
+  const seasonalOffers = await getSeasonalOffers();
 
   return (
     <div className="flex flex-col">
@@ -43,7 +69,7 @@ export default async function HomePage() {
 
       {/* Seasonal Offers Banner */}
       <AnimatedSection animation="fade-up" delay={100}>
-        <SeasonalOffersBanner />
+        <SeasonalOffersBanner offers={seasonalOffers} />
       </AnimatedSection>
 
       {/* Featured Products */}

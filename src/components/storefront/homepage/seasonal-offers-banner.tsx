@@ -1,6 +1,3 @@
-"use client";
-
-import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tag, ArrowRight, Clock } from "lucide-react";
@@ -16,27 +13,7 @@ type Offer = {
   metadata?: any;
 };
 
-export function SeasonalOffersBanner() {
-  const [offers, setOffers] = useState<Offer[]>([]);
-
-  useEffect(() => {
-    let aborted = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/storefront/offers", { cache: "no-store" });
-        const data = await res.json();
-        if (!aborted && res.ok && data?.success) {
-          const items = Array.isArray(data.data?.items) ? data.data.items : [];
-          const seasonal = items.filter((o: any) => o.startsAt || o.endsAt);
-          setOffers(seasonal.slice(0, 4));
-        }
-      } catch { }
-    })();
-    return () => {
-      aborted = true;
-    };
-  }, []);
-
+export function SeasonalOffersBanner({ offers }: { offers: Offer[] }) {
   if (!offers.length) return null;
 
   const renderValue = (o: Offer) => {
