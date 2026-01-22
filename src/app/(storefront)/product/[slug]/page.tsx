@@ -12,10 +12,12 @@ import { RecentlyViewedTracker } from "@/components/storefront/organisms/recentl
 import { RecentlyViewedCarousel } from "@/components/storefront/organisms/recently-viewed-carousel";
 import { RecommendationsRail } from "@/components/storefront/organisms/recommendations-rail";
 import { settingsRepository } from "@/server/repositories/settings.repository";
+import { siteConfig } from "@/config/site";
 
 // Generate metadata for SEO
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || siteConfig.url || "http://localhost:3000";
   
   try {
     const product: Product = await api.get(`/api/storefront/products/${slug}`);
@@ -23,16 +25,50 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     return {
       title: product.metaTitle || product.name,
       description: product.metaDescription || product.shortDescription || product.description,
+      alternates: {
+        canonical: `${baseUrl}/product/${product.slug}`,
+      },
       openGraph: {
+        type: "website",
+        url: `${baseUrl}/product/${product.slug}`,
         title: product.name,
         description: product.shortDescription,
-        images: product.images.map(img => ({ url: img.url, alt: img.altText })),
+        images: product.images.map((img) => ({
+          url: img.url?.startsWith("http") ? img.url : `${baseUrl}${img.url}`,
+          alt: img.altText || product.name,
+        })),
       },
     };
   } catch {
-    return {
-      title: "Product Not Found",
-    };
+    try {
+      const product = await storefrontProductsService.getBySlug(slug);
+      if (!product) {
+        return {
+          title: "Product Not Found",
+        };
+      }
+      return {
+        title: product.metaTitle || product.name,
+        description: product.metaDescription || product.shortDescription || product.description,
+        alternates: {
+          canonical: `${baseUrl}/product/${product.slug}`,
+        },
+        openGraph: {
+          type: "website",
+          url: `${baseUrl}/product/${product.slug}`,
+          title: product.name,
+          description: product.shortDescription,
+          images: product.images.map((img) => ({
+            url: img.url?.startsWith("http") ? img.url : `${baseUrl}${img.url}`,
+            alt: img.altText || product.name,
+          })),
+        },
+      };
+    } catch {
+      return {
+        title: "Product Not Found",
+      };
+    }
   }
 }
 
@@ -54,6 +90,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   const { slug } = await params;
   const product = await getProduct(slug);
   const currency = (await settingsRepository.findByKey("currency"))?.value || "CAD";
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || siteConfig.url || "http://localhost:3000";
 
   if (!product) {
     notFound();
@@ -116,24 +153,43 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
         dangerouslySetInnerHTML={{
           __html: JSON.stringify({
             "@context": "https://schema.org",
-            "@type": "Product",
-            name: product.name,
-            description: product.description,
-            image: product.images.map(img => img.url),
-            sku: product.sku,
-            offers: {
-              "@type": "Offer",
-              price: product.price,
-              priceCurrency: currency,
-              availability: product.stockStatus === "in_stock"
-                ? "https://schema.org/InStock"
-                : "https://schema.org/OutOfStock",
-            },
-            aggregateRating: product.averageRating > 0 ? {
-              "@type": "AggregateRating",
-              ratingValue: product.averageRating,
-              reviewCount: product.reviewCount,
-            } : undefined,
+            "@graph": [
+              {
+                "@type": "BreadcrumbList",
+                itemListElement: breadcrumbs.map((b, idx) => ({
+                  "@type": "ListItem",
+                  position: idx + 1,
+                  name: b.label,
+                  item: `${baseUrl}${b.href}`,
+                })),
+              },
+              {
+                "@type": "Product",
+                name: product.name,
+                description: product.description,
+                image: product.images.map((img) => (img.url?.startsWith("http") ? img.url : `${baseUrl}${img.url}`)),
+                sku: product.sku,
+                offers: {
+                  "@type": "Offer",
+                  price: product.price,
+                  priceCurrency: currency,
+                  itemCondition: "https://schema.org/NewCondition",
+                  availability: product.stockStatus === "in_stock"
+                    ? "https://schema.org/InStock"
+                    : "https://schema.org/OutOfStock",
+                  url: `${baseUrl}/product/${product.slug}`,
+                  seller: {
+                    "@type": "Organization",
+                    "@id": `${baseUrl}/#organization`,
+                  },
+                },
+                aggregateRating: product.averageRating > 0 ? {
+                  "@type": "AggregateRating",
+                  ratingValue: product.averageRating,
+                  reviewCount: product.reviewCount,
+                } : undefined,
+              },
+            ],
           }),
         }}
       />

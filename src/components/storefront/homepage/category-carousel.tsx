@@ -11,6 +11,7 @@ interface Category {
     slug: string;
     image?: string | null;
     productCount?: number;
+    children?: Category[];
 }
 
 interface CategoryCarouselProps {
@@ -29,6 +30,16 @@ export function CategoryCarousel({ categories: initialCategories }: CategoryCaro
     const sectionRef = useRef<HTMLElement>(null);
     const trackRef = useRef<HTMLDivElement>(null);
     const autoplayRef = useRef<NodeJS.Timeout | null>(null);
+
+    const totalProducts = useCallback((node: Category): number => {
+        const walk = (n: Category): number => {
+            const direct = typeof n.productCount === "number" ? n.productCount : 0;
+            const children = n.children || [];
+            if (!children.length) return direct;
+            return direct + children.reduce((acc, c) => acc + walk(c), 0);
+        };
+        return walk(node);
+    }, []);
 
     // Fetch categories if not provided
     useEffect(() => {
@@ -293,9 +304,11 @@ export function CategoryCarousel({ categories: initialCategories }: CategoryCaro
                                 <h3 className="font-semibold text-base sm:text-lg lg:text-xl text-foreground group-hover/card:text-primary transition-colors duration-300 line-clamp-1">
                                     {category.name}
                                 </h3>
-                                {category.productCount !== undefined && (
+                                {(
+                                    (category.productCount !== undefined || (category.children && category.children.length > 0))
+                                ) && (
                                     <p className="text-sm text-muted-foreground mt-1">
-                                        {category.productCount} products
+                                        {totalProducts(category)} products
                                     </p>
                                 )}
                             </div>

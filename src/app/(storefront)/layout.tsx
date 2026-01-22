@@ -12,11 +12,13 @@ import { THEME_MODE_VALUES, THEME_PRESET_VALUES, type ThemeMode, type ThemePrese
 export async function generateMetadata(): Promise<Metadata> {
   const fallbackName = siteConfig.name || "";
   const fallbackDescription = siteConfig.description || "";
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || siteConfig.url || "http://localhost:3000";
 
   const siteName = (await settingsRepository.findByKey("site_name"))?.value || fallbackName;
   const siteDescription = (await settingsRepository.findByKey("site_description"))?.value || fallbackDescription;
 
   return {
+    metadataBase: new URL(baseUrl),
     title: {
       default: siteName,
       template: `%s | ${siteName}`,
@@ -26,6 +28,25 @@ export async function generateMetadata(): Promise<Metadata> {
       icon: "/Storefront/images/Logo.png",
       shortcut: "/Storefront/images/Logo.png",
       apple: "/Storefront/images/Logo.png",
+    },
+    openGraph: {
+      type: "website",
+      url: baseUrl,
+      title: siteName,
+      description: siteDescription,
+      siteName,
+      images: [
+        {
+          url: `${baseUrl}/Storefront/images/Logo.png`,
+          alt: siteName,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: siteName,
+      description: siteDescription,
+      images: [`${baseUrl}/Storefront/images/Logo.png`],
     },
   };
 }
@@ -37,6 +58,7 @@ export default async function StorefrontLayout({
 }) {
   const configuredThemeModeRaw = (await settingsRepository.findByKey("storefront_theme_mode"))?.value;
   const configuredThemePresetRaw = (await settingsRepository.findByKey("storefront_theme_preset"))?.value;
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || siteConfig.url || "http://localhost:3000";
 
   const configuredThemeMode = THEME_MODE_VALUES.includes(configuredThemeModeRaw as ThemeMode)
     ? (configuredThemeModeRaw as ThemeMode)
@@ -56,6 +78,33 @@ export default async function StorefrontLayout({
               __html: `(()=>{try{var d=document.documentElement;d.setAttribute('data-theme-preset',${JSON.stringify(
                 configuredThemePreset,
               )});if(${JSON.stringify(configuredThemeMode)}==='dark'){d.classList.add('dark')}else{d.classList.remove('dark')}}catch(e){}})();`,
+            }}
+          />
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify({
+                "@context": "https://schema.org",
+                "@graph": [
+                  {
+                    "@type": "Organization",
+                    "@id": `${baseUrl}/#organization`,
+                    name: siteConfig.name,
+                    url: baseUrl,
+                    logo: `${baseUrl}/Storefront/images/Logo.png`,
+                  },
+                  {
+                    "@type": "WebSite",
+                    "@id": `${baseUrl}/#website`,
+                    url: baseUrl,
+                    name: siteConfig.name,
+                    description: siteConfig.description,
+                    publisher: {
+                      "@id": `${baseUrl}/#organization`,
+                    },
+                  },
+                ],
+              }),
             }}
           />
           <div className="flex min-h-screen flex-col overflow-x-clip">
