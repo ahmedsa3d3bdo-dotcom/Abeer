@@ -19,7 +19,7 @@ INSERT INTO "permissions" ("id", "name", "slug", "resource", "action", "created_
 VALUES
   (gen_random_uuid(), 'View System Metrics', 'system.metrics.view', 'system', 'metrics.view', now(), now()),
   (gen_random_uuid(), 'Manage System Metrics', 'system.metrics.manage', 'system', 'metrics.manage', now(), now())
-ON CONFLICT ("slug") DO NOTHING;
+ON CONFLICT DO NOTHING;
 --> statement-breakpoint
 DO $$
 BEGIN
