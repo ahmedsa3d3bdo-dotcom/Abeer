@@ -52,7 +52,7 @@ function Counter({
   }, [value, inView]);
 
   return (
-    <span className="tabular-nums">
+    <span className="tabular-nums inline-block min-w-[6ch] whitespace-nowrap">
       {prefix}{count.toLocaleString()}{suffix}
     </span>
   );
@@ -82,6 +82,7 @@ export function HeroSection() {
   const [previousImage, setPreviousImage] = useState<number | null>(null);
   const [isFading, setIsFading] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [prefetchEnabled, setPrefetchEnabled] = useState(false);
   const { ref: statsRef, inView: statsInView } = useInView();
 
   const imageCount = HERO_IMAGES.length;
@@ -149,15 +150,20 @@ export function HeroSection() {
       >
         {/* Full-width Background Image with Carousel */}
         <div className="absolute inset-0">
-          <Image
-            src={HERO_IMAGES[nextPrefetchIndex]}
-            alt=""
-            width={1920}
-            height={1080}
-            sizes="100vw"
-            className="absolute w-px h-px opacity-0 pointer-events-none"
-            aria-hidden
-          />
+          {prefetchEnabled ? (
+            <Image
+              src={HERO_IMAGES[nextPrefetchIndex]}
+              alt=""
+              width={1920}
+              height={1080}
+              sizes="100vw"
+              quality={50}
+              loading="lazy"
+              fetchPriority="low"
+              className="absolute w-px h-px opacity-0 pointer-events-none"
+              aria-hidden
+            />
+          ) : null}
           <div className="relative w-full h-full">
             <div className="absolute inset-0">
               <Image
@@ -167,8 +173,11 @@ export function HeroSection() {
                 fill
                 priority={currentImage === 0}
                 sizes="100vw"
+                quality={75}
+                fetchPriority={currentImage === 0 ? "high" : "auto"}
                 className="object-cover"
                 onLoadingComplete={() => {
+                  if (currentImage === 0 && !prefetchEnabled) setPrefetchEnabled(true);
                   if (previousImage === null) return;
                   if (isFading) return;
                   if (fadeStartRef.current) clearTimeout(fadeStartRef.current);
@@ -198,6 +207,7 @@ export function HeroSection() {
                   fill
                   priority={previousImage === 0}
                   sizes="100vw"
+                  quality={75}
                   className="object-cover"
                 />
               </div>
