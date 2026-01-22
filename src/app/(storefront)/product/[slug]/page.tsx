@@ -13,11 +13,17 @@ import { RecentlyViewedCarousel } from "@/components/storefront/organisms/recent
 import { RecommendationsRail } from "@/components/storefront/organisms/recommendations-rail";
 import { settingsRepository } from "@/server/repositories/settings.repository";
 import { siteConfig } from "@/config/site";
+import { headers } from "next/headers";
 
 // Generate metadata for SEO
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || siteConfig.url || "http://localhost:3000";
+  const h = await headers();
+  const host = h.get("x-forwarded-host") || h.get("host");
+  const proto = h.get("x-forwarded-proto") || "https";
+  const requestOrigin = host ? `${proto}://${host}` : undefined;
+  const configured = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || process.env.APP_URL;
+  const baseUrl = (configured || requestOrigin || siteConfig.url || "http://localhost:3000").replace(/\/+$/, "");
   
   try {
     const product: Product = await api.get(`/api/storefront/products/${slug}`);
@@ -90,7 +96,12 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   const { slug } = await params;
   const product = await getProduct(slug);
   const currency = (await settingsRepository.findByKey("currency"))?.value || "CAD";
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || siteConfig.url || "http://localhost:3000";
+  const h = await headers();
+  const host = h.get("x-forwarded-host") || h.get("host");
+  const proto = h.get("x-forwarded-proto") || "https";
+  const requestOrigin = host ? `${proto}://${host}` : undefined;
+  const configured = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || process.env.APP_URL;
+  const baseUrl = (configured || requestOrigin || siteConfig.url || "http://localhost:3000").replace(/\/+$/, "");
 
   if (!product) {
     notFound();

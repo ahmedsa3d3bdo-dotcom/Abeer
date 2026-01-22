@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Script from "next/script";
+import { headers } from "next/headers";
 import { StorefrontHeader } from "@/components/storefront/layout/header";
 import { StorefrontFooter } from "@/components/storefront/layout/footer";
 import { QueryProvider } from "@/components/storefront/providers/query-provider";
@@ -12,7 +13,12 @@ import { THEME_MODE_VALUES, THEME_PRESET_VALUES, type ThemeMode, type ThemePrese
 export async function generateMetadata(): Promise<Metadata> {
   const fallbackName = siteConfig.name || "";
   const fallbackDescription = siteConfig.description || "";
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || siteConfig.url || "http://localhost:3000";
+  const h = await headers();
+  const host = h.get("x-forwarded-host") || h.get("host");
+  const proto = h.get("x-forwarded-proto") || "https";
+  const requestOrigin = host ? `${proto}://${host}` : undefined;
+  const configured = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || process.env.APP_URL;
+  const baseUrl = (configured || requestOrigin || siteConfig.url || "http://localhost:3000").replace(/\/+$/, "");
 
   const siteName = (await settingsRepository.findByKey("site_name"))?.value || fallbackName;
   const siteDescription = (await settingsRepository.findByKey("site_description"))?.value || fallbackDescription;
@@ -58,7 +64,12 @@ export default async function StorefrontLayout({
 }) {
   const configuredThemeModeRaw = (await settingsRepository.findByKey("storefront_theme_mode"))?.value;
   const configuredThemePresetRaw = (await settingsRepository.findByKey("storefront_theme_preset"))?.value;
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || siteConfig.url || "http://localhost:3000";
+  const h = await headers();
+  const host = h.get("x-forwarded-host") || h.get("host");
+  const proto = h.get("x-forwarded-proto") || "https";
+  const requestOrigin = host ? `${proto}://${host}` : undefined;
+  const configured = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || process.env.APP_URL;
+  const baseUrl = (configured || requestOrigin || siteConfig.url || "http://localhost:3000").replace(/\/+$/, "");
 
   const configuredThemeMode = THEME_MODE_VALUES.includes(configuredThemeModeRaw as ThemeMode)
     ? (configuredThemeModeRaw as ThemeMode)

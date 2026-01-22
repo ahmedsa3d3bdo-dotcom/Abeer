@@ -1,11 +1,22 @@
 import { MetadataRoute } from "next";
 import { eq } from "drizzle-orm";
+import { headers } from "next/headers";
 
 import { db } from "@/shared/db";
 import * as schema from "@/shared/db/schema";
+import { siteConfig } from "@/config/site";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+  const getRequestOrigin = async () => {
+    const h = await headers();
+    const host = h.get("x-forwarded-host") || h.get("host");
+    if (!host) return undefined;
+    const proto = h.get("x-forwarded-proto") || "https";
+    return `${proto}://${host}`;
+  };
+
+  const configured = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || process.env.APP_URL;
+  const baseUrl = (configured || (await getRequestOrigin()) || siteConfig.url || "http://localhost:3000").replace(/\/+$/, "");
 
   // Static routes
   const staticRoutes = [

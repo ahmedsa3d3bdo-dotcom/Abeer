@@ -326,7 +326,10 @@ export default function ShopPage() {
   const [density, setDensity] = useState<"comfortable" | "compact">("comfortable");
 
   const baseUrl = useMemo(() => {
-    return process.env.NEXT_PUBLIC_SITE_URL || siteConfig.url || "http://localhost:3000";
+    const configured = process.env.NEXT_PUBLIC_SITE_URL;
+    if (configured) return String(configured).replace(/\/+$/, "");
+    if (typeof window !== "undefined" && window.location?.origin) return window.location.origin;
+    return String(siteConfig.url || "http://localhost:3000").replace(/\/+$/, "");
   }, []);
 
   const selectedCategory = useMemo(() => {

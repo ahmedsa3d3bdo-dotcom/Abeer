@@ -1,4 +1,5 @@
 import { siteConfig } from "@/config/site";
+import { headers } from "next/headers";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -14,12 +15,17 @@ function getAll(searchParams: SearchParams | undefined, key: string): string[] {
   return Array.isArray(v) ? v.filter(Boolean) : [v].filter(Boolean);
 }
 
-export default function Head({
+export default async function Head({
   searchParams,
 }: {
   searchParams?: SearchParams;
 }) {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || siteConfig.url || "http://localhost:3000";
+  const h = await headers();
+  const host = h.get("x-forwarded-host") || h.get("host");
+  const proto = h.get("x-forwarded-proto") || "https";
+  const requestOrigin = host ? `${proto}://${host}` : undefined;
+  const configured = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || process.env.APP_URL;
+  const baseUrl = (configured || requestOrigin || siteConfig.url || "http://localhost:3000").replace(/\/+$/, "");
 
   const categorySlugs = getAll(searchParams, "categorySlug");
   const canonicalBase =
