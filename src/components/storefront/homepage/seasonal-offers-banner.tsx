@@ -13,8 +13,9 @@ type Offer = {
   metadata?: any;
 };
 
-export function SeasonalOffersBanner({ offers }: { offers: Offer[] }) {
-  if (!offers.length) return null;
+export function SeasonalOffersBanner({ offers }: { offers?: Offer[] }) {
+  const safeOffers = offers || [];
+  if (!safeOffers.length) return null;
 
   const renderValue = (o: Offer) => {
     if (o.type === "percentage") return `${parseFloat(o.value)}% off`;
@@ -32,7 +33,7 @@ export function SeasonalOffersBanner({ offers }: { offers: Offer[] }) {
 
       {/* Offers Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {offers.map((o) => (
+        {safeOffers.map((o) => (
           <div
             key={o.id}
             className="group rounded-xl sm:rounded-2xl border border-border/50 bg-background/80 backdrop-blur-sm p-4 sm:p-5 flex items-start justify-between gap-3 transition-all duration-300 hover:shadow-md hover:border-primary/20"
