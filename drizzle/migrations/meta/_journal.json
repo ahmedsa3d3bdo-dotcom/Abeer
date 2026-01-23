@@ -120,6 +120,13 @@
       "when": 1769000000000,
       "tag": "0016_create_system_metrics_samples",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1769100000000,
+      "tag": "0017_add_product_specs",
+      "breakpoints": true
     }
   ]
 }

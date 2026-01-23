@@ -33,8 +33,14 @@ const upsertSchema = z.object({
   name: z.string().min(1),
   slug: z.string().min(1).optional(),
   sku: z.string().optional(),
+  serialNumber: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
   shortDescription: z.string().nullable().optional(),
+  specMaterial: z.string().nullable().optional(),
+  specColor: z.string().nullable().optional(),
+  specDimensions: z.string().nullable().optional(),
+  specStyle: z.string().nullable().optional(),
+  specIdealFor: z.string().nullable().optional(),
   price: z.string().regex(/^\d+(\.\d{1,2})?$/, "Invalid price"),
   costPerItem: z
     .string()

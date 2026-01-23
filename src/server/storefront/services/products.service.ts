@@ -72,6 +72,12 @@ export class StorefrontProductsService {
       name: product.name,
       slug: product.slug,
       sku: product.sku || product.id, // Fallback to ID if SKU is null
+      serialNumber: (product as any).serialNumber || undefined,
+      specMaterial: (product as any).specMaterial || undefined,
+      specColor: (product as any).specColor || undefined,
+      specDimensions: (product as any).specDimensions || undefined,
+      specStyle: (product as any).specStyle || undefined,
+      specIdealFor: (product as any).specIdealFor || undefined,
       description: product.description || "",
       shortDescription: product.shortDescription || "",
       price: parseFloat(product.price),

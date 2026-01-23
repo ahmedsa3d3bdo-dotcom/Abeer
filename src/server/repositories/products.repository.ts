@@ -123,8 +123,14 @@ export class ProductsRepository {
         name: schema.products.name,
         slug: schema.products.slug,
         sku: schema.products.sku,
+        serialNumber: schema.products.serialNumber,
         description: schema.products.description,
         shortDescription: schema.products.shortDescription,
+        specMaterial: schema.products.specMaterial,
+        specColor: schema.products.specColor,
+        specDimensions: schema.products.specDimensions,
+        specStyle: schema.products.specStyle,
+        specIdealFor: schema.products.specIdealFor,
         price: schema.products.price,
         costPerItem: schema.products.costPerItem,
         compareAtPrice: schema.products.compareAtPrice,
@@ -146,8 +152,14 @@ export class ProductsRepository {
         schema.products.name,
         schema.products.slug,
         schema.products.sku,
+        schema.products.serialNumber,
         schema.products.description,
         schema.products.shortDescription,
+        schema.products.specMaterial,
+        schema.products.specColor,
+        schema.products.specDimensions,
+        schema.products.specStyle,
+        schema.products.specIdealFor,
         schema.products.price,
         schema.products.status,
         schema.products.stockStatus,
@@ -164,8 +176,14 @@ export class ProductsRepository {
     name: string;
     slug?: string;
     sku?: string | null;
+    serialNumber?: string | null;
     description?: string | null;
     shortDescription?: string | null;
+    specMaterial?: string | null;
+    specColor?: string | null;
+    specDimensions?: string | null;
+    specStyle?: string | null;
+    specIdealFor?: string | null;
     price: string;
     costPerItem?: string | null;
     compareAtPrice?: string | null;
@@ -185,8 +203,14 @@ export class ProductsRepository {
         name: input.name,
         slug,
         sku: input.sku ?? null,
+        serialNumber: input.serialNumber ?? null,
         description: input.description ?? null,
         shortDescription: input.shortDescription ?? null,
+        specMaterial: input.specMaterial ?? null,
+        specColor: input.specColor ?? null,
+        specDimensions: input.specDimensions ?? null,
+        specStyle: input.specStyle ?? null,
+        specIdealFor: input.specIdealFor ?? null,
         price: input.price as any,
         costPerItem: (input.costPerItem ?? null) as any,
         compareAtPrice: (input.compareAtPrice ?? null) as any,

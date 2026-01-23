@@ -8,8 +8,14 @@ export interface Product {
   name: string;
   slug: string;
   sku: string;
+  serialNumber?: string;
   description: string;
   shortDescription: string;
+  specMaterial?: string;
+  specColor?: string;
+  specDimensions?: string;
+  specStyle?: string;
+  specIdealFor?: string;
   price: number;
   compareAtPrice?: number;
   images: ProductImage[];

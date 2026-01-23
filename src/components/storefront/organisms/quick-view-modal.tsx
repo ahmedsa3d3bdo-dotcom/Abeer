@@ -137,7 +137,7 @@ export function QuickViewModal({
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent
         showCloseButton={false}
-        className="sm:max-w-4xl sm:max-h-[90vh] w-[100vw] sm:w-auto h-[100dvh] sm:h-auto rounded-none sm:rounded-lg p-0 sm:p-6 overflow-y-auto overscroll-contain"
+        className="sm:max-w-4xl sm:max-h-[90vh] w-[100vw] sm:w-auto h-[100dvh] sm:h-auto rounded-none sm:rounded-lg p-0 sm:p-6 overflow-hidden overscroll-contain"
       >
         <DialogTitle className="sr-only">
           {product?.name || "Product Quick View"}
@@ -153,185 +153,190 @@ export function QuickViewModal({
           <span className="sr-only">Close</span>
         </Button>
 
-        {productLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-6 px-4 sm:px-0 pb-24 sm:pb-6">
-            <Skeleton className="aspect-square rounded-lg" />
-            <div className="space-y-4">
-              <Skeleton className="h-8 w-3/4" />
-              <Skeleton className="h-6 w-1/2" />
-              <Skeleton className="h-20 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-          </div>
-        ) : product ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-6 px-4 sm:px-0 pb-24 sm:pb-6">
-            {/* Images */}
-            <div className="space-y-4">
-              <div className="relative aspect-square bg-muted rounded-lg overflow-hidden">
-                <Image
-                  src={mainImageSrc}
-                  alt={product.images[selectedImageIndex]?.altText || product.name}
-                  fill
-                  className="object-cover"
-                  sizes="(max-width: 768px) 100vw, 50vw"
-                  unoptimized={shouldUnoptimize(mainImageSrc)}
-                  onError={() => setMainImageSrc("/placeholder-product.svg")}
-                />
-              </div>
-              {product.images.length > 1 && (
-                <div className="grid grid-cols-4 gap-2">
-                  {product.images.slice(0, 4).map((image, index) => (
-                    <button
-                      key={image.id}
-                      onClick={() => setSelectedImageIndex(index)}
-                      className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${
-                        selectedImageIndex === index
-                          ? "border-primary"
-                          : "border-transparent hover:border-muted-foreground/20"
-                      }`}
-                    >
-                      <Image
-                        src={safeImageSrc(image.url)}
-                        alt={image.altText || product.name}
-                        fill
-                        className="object-cover"
-                        sizes="25vw"
-                        unoptimized={shouldUnoptimize(image.url)}
-                      />
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Product Info */}
-            <div className="space-y-4">
-              {/* Name and Badges */}
-              <div>
-                <h2 className="text-2xl font-bold mb-2">{product.name}</h2>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm text-muted-foreground">
-                    SKU: {product.sku}
-                  </span>
-                  {product.isFeatured && <ProductBadge type="featured" />}
-                  {isOutOfStock && <ProductBadge type="out-of-stock" />}
+        <div className="flex h-[100dvh] flex-col sm:h-auto sm:max-h-[90vh]">
+          <div className="flex-1 overflow-y-auto no-scrollbar">
+            {productLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-6 px-4 sm:px-0 sm:pb-6">
+                <Skeleton className="aspect-square rounded-lg" />
+                <div className="space-y-4">
+                  <Skeleton className="h-8 w-3/4" />
+                  <Skeleton className="h-6 w-1/2" />
+                  <Skeleton className="h-20 w-full" />
+                  <Skeleton className="h-10 w-full" />
                 </div>
               </div>
+            ) : product ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-6 px-4 sm:px-0 sm:pb-6">
+                {/* Images */}
+                <div className="space-y-4">
+                  <div className="relative aspect-square bg-muted rounded-lg overflow-hidden">
+                    <Image
+                      src={mainImageSrc}
+                      alt={product.images[selectedImageIndex]?.altText || product.name}
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 768px) 100vw, 50vw"
+                      unoptimized={shouldUnoptimize(mainImageSrc)}
+                      onError={() => setMainImageSrc("/placeholder-product.svg")}
+                    />
+                  </div>
+                  {product.images.length > 1 && (
+                    <div className="grid grid-cols-4 gap-2">
+                      {product.images.slice(0, 4).map((image, index) => (
+                        <button
+                          key={image.id}
+                          onClick={() => setSelectedImageIndex(index)}
+                          className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${
+                            selectedImageIndex === index
+                              ? "border-primary"
+                              : "border-transparent hover:border-muted-foreground/20"
+                          }`}
+                        >
+                          <Image
+                            src={safeImageSrc(image.url)}
+                            alt={image.altText || product.name}
+                            fill
+                            className="object-cover"
+                            sizes="25vw"
+                            unoptimized={shouldUnoptimize(image.url)}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
-              {/* Rating */}
-              {product.averageRating > 0 && (
-                <RatingStars
-                  rating={product.averageRating}
-                  reviewCount={product.reviewCount}
-                />
-              )}
+                {/* Product Info */}
+                <div className="space-y-4">
+                  {/* Name and Badges */}
+                  <div>
+                    <h2 className="text-2xl font-bold mb-2">{product.name}</h2>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm text-muted-foreground">
+                        SKU: {product.sku}
+                      </span>
+                      {product.isFeatured && <ProductBadge type="featured" />}
+                      {isOutOfStock && <ProductBadge type="out-of-stock" />}
+                    </div>
+                  </div>
 
-              {/* Price */}
-              <PriceDisplay
-                price={currentPrice}
-                compareAtPrice={product.compareAtPrice}
-                className="text-xl"
-              />
+                  {/* Rating */}
+                  {product.averageRating > 0 && (
+                    <RatingStars
+                      rating={product.averageRating}
+                      reviewCount={product.reviewCount}
+                    />
+                  )}
 
-              {/* Short Description */}
-              {product.shortDescription && (
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  {product.shortDescription}
-                </p>
-              )}
+                  {/* Price */}
+                  <PriceDisplay
+                    price={currentPrice}
+                    compareAtPrice={product.compareAtPrice}
+                    className="text-xl"
+                  />
 
-              {/* Variants */}
-              {product.variants && product.variants.length > 0 && (
-                <VariantSelector
-                  variants={product.variants}
-                  selectedVariantId={selectedVariant}
-                  onVariantChange={setSelectedVariant}
-                />
-              )}
+                  {(product.specColor || product.specDimensions) && (
+                    <div className="space-y-2 text-sm">
+                      {product.specColor ? (
+                        <div className="flex justify-between gap-6">
+                          <span className="text-muted-foreground">Color:</span>
+                          <span className="font-medium">{product.specColor}</span>
+                        </div>
+                      ) : null}
+                      {product.specDimensions ? (
+                        <div className="flex justify-between gap-6">
+                          <span className="text-muted-foreground">Dimensions:</span>
+                          <span className="font-medium">{product.specDimensions}</span>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
 
-              {/* Quantity */}
-              {!isOutOfStock && (
-                <QuantitySelector
-                  value={quantity}
-                  onChange={setQuantity}
-                  max={currentStock}
-                />
-              )}
+                  {/* Variants */}
+                  {product.variants && product.variants.length > 0 && (
+                    <VariantSelector
+                      variants={product.variants}
+                      selectedVariantId={selectedVariant}
+                      onVariantChange={setSelectedVariant}
+                    />
+                  )}
 
-              {/* Actions (desktop/tablet) */}
-              <div className="space-y-3 hidden sm:block">
-                <Button
-                  size="lg"
-                  className="w-full"
-                  onClick={handleAddToCart}
-                  disabled={isLoading || isOutOfStock}
-                >
-                  <ShoppingCart className="mr-2 h-5 w-5" />
-                  {isOutOfStock
-                    ? "Out of Stock"
-                    : isLoading
-                    ? "Adding..."
-                    : "Add to Cart"}
-                </Button>
-                {!isOutOfStock && (
-                  <Button
-                    variant="outline"
-                    size="lg"
-                    className="w-full"
-                    onClick={handleBuyNow}
-                    disabled={isBuying}
-                  >
-                    {isBuying ? "Loading..." : "Buy Now"}
-                  </Button>
-                )}
-                <Link href={`/product/${productSlug}`} onClick={() => handleOpenChange(false)}>
-                  <Button variant="outline" size="lg" className="w-full">
-                    <ExternalLink className="mr-2 h-4 w-4" />
-                    View Full Details
-                  </Button>
-                </Link>
-              </div>
-              {/* Mobile sticky actions */}
-              <div className="sm:hidden" aria-hidden>
-                <div className="fixed inset-x-0 bottom-0 z-50 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
-                  <div className="grid grid-cols-2 gap-2">
+                  {/* Quantity */}
+                  {!isOutOfStock && (
+                    <QuantitySelector
+                      value={quantity}
+                      onChange={setQuantity}
+                      max={currentStock}
+                    />
+                  )}
+
+                  {/* Actions (desktop/tablet) */}
+                  <div className="space-y-3 hidden sm:block">
                     <Button
                       size="lg"
+                      className="w-full"
                       onClick={handleAddToCart}
                       disabled={isLoading || isOutOfStock}
                     >
-                      {isOutOfStock ? "Out" : isLoading ? "Adding..." : "Add"}
+                      <ShoppingCart className="mr-2 h-5 w-5" />
+                      {isOutOfStock
+                        ? "Out of Stock"
+                        : isLoading
+                        ? "Adding..."
+                        : "Add to Cart"}
                     </Button>
                     {!isOutOfStock && (
                       <Button
-                        size="lg"
                         variant="outline"
+                        size="lg"
+                        className="w-full"
                         onClick={handleBuyNow}
                         disabled={isBuying}
                       >
                         {isBuying ? "Loading..." : "Buy Now"}
                       </Button>
                     )}
+                    <Link href={`/product/${productSlug}`} onClick={() => handleOpenChange(false)}>
+                      <Button variant="outline" size="lg" className="w-full">
+                        <ExternalLink className="mr-2 h-4 w-4" />
+                        View Full Details
+                      </Button>
+                    </Link>
                   </div>
                 </div>
               </div>
+            ) : (
+              <div className="py-12 sm:py-12 text-center text-muted-foreground">
+                Product not found
+              </div>
+            )}
+          </div>
 
-              {/* Categories */}
-              {product.categories && product.categories.length > 0 && (
-                <div className="text-sm border-t pt-4">
-                  <span className="text-muted-foreground">Category: </span>
-                  <span className="font-medium">
-                    {product.categories[0].name}
-                  </span>
-                </div>
-              )}
+          {/* Mobile fixed footer actions (outside scroll area) */}
+          {product && !productLoading ? (
+            <div className="sm:hidden border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  size="lg"
+                  onClick={handleAddToCart}
+                  disabled={isLoading || isOutOfStock}
+                >
+                  {isOutOfStock ? "Out" : isLoading ? "Adding..." : "Add"}
+                </Button>
+                {!isOutOfStock && (
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={handleBuyNow}
+                    disabled={isBuying}
+                  >
+                    {isBuying ? "Loading..." : "Buy Now"}
+                  </Button>
+                )}
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className="py-12 pb-24 sm:pb-12 text-center text-muted-foreground">
-            Product not found
-          </div>
-        )}
+          ) : null}
+        </div>
       </DialogContent>
     </Dialog>
   );

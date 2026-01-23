@@ -207,6 +207,35 @@ export function ProductInfo({ product }: ProductInfoProps) {
         </p>
       )}
 
+      {(product.categories?.[0]?.name || product.specDimensions || product.specColor || product.status) && (
+        <div className="space-y-2 text-sm">
+          {product.categories?.[0]?.name ? (
+            <div className="flex justify-between gap-6">
+              <span className="text-muted-foreground">Category:</span>
+              <span className="font-medium">{product.categories[0].name}</span>
+            </div>
+          ) : null}
+          {product.specDimensions ? (
+            <div className="flex justify-between gap-6">
+              <span className="text-muted-foreground">Dimensions:</span>
+              <span className="font-medium">{product.specDimensions}</span>
+            </div>
+          ) : null}
+          {product.specColor ? (
+            <div className="flex justify-between gap-6">
+              <span className="text-muted-foreground">Color:</span>
+              <span className="font-medium">{product.specColor}</span>
+            </div>
+          ) : null}
+          {product.status ? (
+            <div className="flex justify-between gap-6">
+              <span className="text-muted-foreground">Status:</span>
+              <span className="font-medium capitalize">{product.status}</span>
+            </div>
+          ) : null}
+        </div>
+      )}
+
       <Separator />
 
       {/* Variant Selector */}
@@ -279,24 +308,6 @@ export function ProductInfo({ product }: ProductInfoProps) {
             )}
           </div>
         </div>
-      </div>
-
-      {/* Additional Info */}
-      <Separator />
-
-      <div className="space-y-2 text-sm">
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">Category:</span>
-          <span className="font-medium">
-            {product.categories?.[0]?.name || "Uncategorized"}
-          </span>
-        </div>
-        {product.status && (
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Status:</span>
-            <span className="font-medium capitalize">{product.status}</span>
-          </div>
-        )}
       </div>
     </div>
   );

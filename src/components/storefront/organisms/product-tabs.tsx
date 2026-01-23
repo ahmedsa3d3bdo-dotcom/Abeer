@@ -80,6 +80,12 @@ export function ProductTabs({ product }: ProductTabsProps) {
             <span className="font-medium">SKU</span>
             <span className="text-muted-foreground">{product.sku}</span>
           </div>
+          {product.serialNumber ? (
+            <div className="grid grid-cols-2 gap-4 p-4">
+              <span className="font-medium">S/N</span>
+              <span className="text-muted-foreground">{product.serialNumber}</span>
+            </div>
+          ) : null}
           <div className="grid grid-cols-2 gap-4 p-4">
             <span className="font-medium">Status</span>
             <span className="text-muted-foreground capitalize">
@@ -100,6 +106,36 @@ export function ProductTabs({ product }: ProductTabsProps) {
               </span>
             </div>
           )}
+          {product.specMaterial ? (
+            <div className="grid grid-cols-2 gap-4 p-4">
+              <span className="font-medium">Material</span>
+              <span className="text-muted-foreground">{product.specMaterial}</span>
+            </div>
+          ) : null}
+          {product.specColor ? (
+            <div className="grid grid-cols-2 gap-4 p-4">
+              <span className="font-medium">Color</span>
+              <span className="text-muted-foreground">{product.specColor}</span>
+            </div>
+          ) : null}
+          {product.specDimensions ? (
+            <div className="grid grid-cols-2 gap-4 p-4">
+              <span className="font-medium">Dimensions</span>
+              <span className="text-muted-foreground">{product.specDimensions}</span>
+            </div>
+          ) : null}
+          {product.specStyle ? (
+            <div className="grid grid-cols-2 gap-4 p-4">
+              <span className="font-medium">Style</span>
+              <span className="text-muted-foreground">{product.specStyle}</span>
+            </div>
+          ) : null}
+          {product.specIdealFor ? (
+            <div className="grid grid-cols-2 gap-4 p-4">
+              <span className="font-medium">Ideal For</span>
+              <span className="text-muted-foreground">{product.specIdealFor}</span>
+            </div>
+          ) : null}
           {product.variants && product.variants.length > 0 && (
             <div className="grid grid-cols-2 gap-4 p-4">
               <span className="font-medium">Available Variants</span>

@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 import { DataTable } from "@/components/data-table/data-table";
 import { DataTablePagination } from "@/components/data-table/data-table-pagination";
 import { useDataTableInstance } from "@/hooks/use-data-table-instance";
@@ -63,6 +64,12 @@ export default function ProductsPage() {
     name: "",
     slug: "",
     sku: "",
+    serialNumber: "",
+    specMaterial: "",
+    specColor: "",
+    specDimensions: "",
+    specStyle: "",
+    specIdealFor: "",
     price: "0.00",
     costPerItem: "",
     compareAtPrice: "",
@@ -235,6 +242,12 @@ export default function ProductsPage() {
       const catId = Array.isArray(p.categoryIds) && p.categoryIds.length ? p.categoryIds[0] : "none";
       setForm((s) => ({
         ...s,
+        serialNumber: p.serialNumber || "",
+        specMaterial: p.specMaterial || "",
+        specColor: p.specColor || "",
+        specDimensions: p.specDimensions || "",
+        specStyle: p.specStyle || "",
+        specIdealFor: p.specIdealFor || "",
         description: p.description || "",
         shortDescription: p.shortDescription || "",
         compareAtPrice: typeof p.compareAtPrice === "string" && p.compareAtPrice ? p.compareAtPrice : "",
@@ -346,7 +359,7 @@ export default function ProductsPage() {
 
   function resetForm() {
     setEditing(null);
-    setForm({ name: "", slug: "", sku: "", price: "0.00", costPerItem: "", compareAtPrice: "", status: "draft", stockStatus: "in_stock", trackInventory: true, isFeatured: false, allowReviews: true, description: "", shortDescription: "", stockQuantity: 0, addStockQuantity: 0, categoryId: "none" });
+    setForm({ name: "", slug: "", sku: "", serialNumber: "", specMaterial: "", specColor: "", specDimensions: "", specStyle: "", specIdealFor: "", price: "0.00", costPerItem: "", compareAtPrice: "", status: "draft", stockStatus: "in_stock", trackInventory: true, isFeatured: false, allowReviews: true, description: "", shortDescription: "", stockQuantity: 0, addStockQuantity: 0, categoryId: "none" });
     setDraftImages([]);
   }
 
@@ -356,6 +369,12 @@ export default function ProductsPage() {
         name: form.name,
         slug: form.slug || undefined,
         sku: form.sku || undefined,
+        serialNumber: form.serialNumber?.trim() ? form.serialNumber.trim() : null,
+        specMaterial: form.specMaterial?.trim() ? form.specMaterial.trim() : null,
+        specColor: form.specColor?.trim() ? form.specColor.trim() : null,
+        specDimensions: form.specDimensions?.trim() ? form.specDimensions.trim() : null,
+        specStyle: form.specStyle?.trim() ? form.specStyle.trim() : null,
+        specIdealFor: form.specIdealFor?.trim() ? form.specIdealFor.trim() : null,
         price: form.price,
         costPerItem: form.costPerItem?.trim() ? form.costPerItem : null,
         compareAtPrice: form.compareAtPrice?.trim() ? form.compareAtPrice : null,
@@ -502,7 +521,7 @@ export default function ProductsPage() {
             open={open}
             onOpenChange={(o) => (o ? setOpen(true) : (setOpen(false), resetForm()))}
             title={editing ? "Edit Product" : "Create Product"}
-            className="sm:max-w-[620px]"
+            className="sm:max-w-[920px]"
             submitting={loading}
             submitText={editing ? "Update" : "Create"}
             onSubmit={onSubmit}
@@ -527,6 +546,10 @@ export default function ProductsPage() {
                 <div className="flex flex-col gap-1.5">
                   <Label>SKU</Label>
                   <Input value={form.sku} onChange={(e) => setForm((s) => ({ ...s, sku: e.target.value }))} />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label>S/N</Label>
+                  <Input value={form.serialNumber} onChange={(e) => setForm((s) => ({ ...s, serialNumber: e.target.value }))} />
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label>Price</Label>
@@ -630,14 +653,46 @@ export default function ProductsPage() {
                   <Label htmlFor="allowReviews">Allow reviews</Label>
                 </div>
               </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="flex flex-col gap-1.5">
+                  <Label>Material</Label>
+                  <Input value={form.specMaterial} onChange={(e) => setForm((s) => ({ ...s, specMaterial: e.target.value }))} />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label>Color</Label>
+                  <Input value={form.specColor} onChange={(e) => setForm((s) => ({ ...s, specColor: e.target.value }))} />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label>Dimensions</Label>
+                  <Input value={form.specDimensions} onChange={(e) => setForm((s) => ({ ...s, specDimensions: e.target.value }))} />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label>Style</Label>
+                  <Input value={form.specStyle} onChange={(e) => setForm((s) => ({ ...s, specStyle: e.target.value }))} />
+                </div>
+                <div className="flex flex-col gap-1.5 sm:col-span-2">
+                  <Label>Ideal For</Label>
+                  <Input value={form.specIdealFor} onChange={(e) => setForm((s) => ({ ...s, specIdealFor: e.target.value }))} />
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="flex flex-col gap-1.5">
                   <Label>Short Description</Label>
-                  <Input value={form.shortDescription} onChange={(e) => setForm((s) => ({ ...s, shortDescription: e.target.value }))} />
+                  <Textarea
+                    value={form.shortDescription}
+                    onChange={(e) => setForm((s) => ({ ...s, shortDescription: e.target.value }))}
+                    className="min-h-[120px]"
+                  />
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label>Description</Label>
-                  <Input value={form.description} onChange={(e) => setForm((s) => ({ ...s, description: e.target.value }))} />
+                  <Textarea
+                    value={form.description}
+                    onChange={(e) => setForm((s) => ({ ...s, description: e.target.value }))}
+                    className="min-h-[160px]"
+                  />
                 </div>
               </div>
               <div className="mt-2">

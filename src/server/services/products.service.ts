@@ -21,8 +21,14 @@ export interface UpsertProductInput {
   name: string;
   slug?: string;
   sku?: string | null;
+  serialNumber?: string | null;
   description?: string | null;
   shortDescription?: string | null;
+  specMaterial?: string | null;
+  specColor?: string | null;
+  specDimensions?: string | null;
+  specStyle?: string | null;
+  specIdealFor?: string | null;
   price: string;
   costPerItem?: string | null;
   compareAtPrice?: string | null;
