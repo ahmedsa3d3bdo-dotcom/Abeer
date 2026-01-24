@@ -56,12 +56,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
 
-  const categoryRoutes = categories.map((c) => ({
-    url: `${baseUrl}/shop/${encodeURIComponent(c.slug)}`,
-    lastModified: c.updatedAt || new Date(),
-    changeFrequency: "weekly" as const,
-    priority: 0.6,
-  }));
+  const categoryRoutes = categories.map((c) => {
+    const url = new URL(`${baseUrl}/shop`);
+    url.searchParams.set("categorySlug", c.slug);
+    return {
+      url: url.toString(),
+      lastModified: c.updatedAt || new Date(),
+      changeFrequency: "weekly" as const,
+      priority: 0.6,
+    };
+  });
 
   return [...staticRoutes, ...categoryRoutes, ...productRoutes];
 }
