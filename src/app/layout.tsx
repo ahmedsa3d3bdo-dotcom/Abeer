@@ -2,6 +2,7 @@ import { ReactNode } from "react";
 
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { headers } from "next/headers";
 
 import { Toaster } from "@/components/ui/sonner";
 import { PrintProvider } from "@/components/common/print/print-provider";
@@ -9,21 +10,67 @@ import { getPreference } from "@/server/server-actions";
 import { settingsRepository } from "@/server/repositories/settings.repository";
 import { PreferencesStoreProvider } from "@/stores/preferences/preferences-provider";
 import { THEME_MODE_VALUES, THEME_PRESET_VALUES, type ThemePreset, type ThemeMode } from "@/types/preferences/theme";
+import { siteConfig } from "@/config/site";
 
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export async function generateMetadata(): Promise<Metadata> {
-  const siteName = (await settingsRepository.findByKey("site_name"))?.value || "";
-  const siteDescription = (await settingsRepository.findByKey("site_description"))?.value || "";
+  const fallbackName = siteConfig.name || "";
+  const fallbackDescription = siteConfig.description || "";
+
+  const h = await headers();
+  const host = h.get("x-forwarded-host") || h.get("host");
+  const proto = h.get("x-forwarded-proto") || "https";
+  const requestOrigin = host ? `${proto}://${host}` : undefined;
+  const configured = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || process.env.APP_URL;
+  const baseUrl = (configured || requestOrigin || siteConfig.url || "http://localhost:3000").replace(/\/+$/, "");
+
+  const siteName = (await settingsRepository.findByKey("site_name"))?.value || fallbackName;
+  const siteDescription = (await settingsRepository.findByKey("site_description"))?.value || fallbackDescription;
 
   return {
+    metadataBase: new URL(baseUrl),
     title: {
       default: siteName,
       template: siteName ? `%s | ${siteName}` : "%s",
     },
     description: siteDescription,
+    alternates: {
+      canonical: baseUrl,
+    },
+    icons: {
+      icon: [
+        { url: "/favicon.ico" },
+        { url: "/Storefront/images/Logo.png" },
+      ],
+      shortcut: [
+        { url: "/favicon.ico" },
+        { url: "/Storefront/images/Logo.png" },
+      ],
+      apple: [{ url: "/Storefront/images/Logo.png" }],
+    },
+    manifest: "/manifest.webmanifest",
+    openGraph: {
+      type: "website",
+      url: baseUrl,
+      title: siteName,
+      description: siteDescription,
+      siteName,
+      images: [
+        {
+          url: `${baseUrl}/Storefront/images/Logo.png`,
+          alt: siteName,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: siteName,
+      description: siteDescription,
+      images: [`${baseUrl}/Storefront/images/Logo.png`],
+    },
   };
 }
 

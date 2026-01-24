@@ -7,11 +7,12 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
 import { Separator } from "@/components/ui/separator";
-import { Star } from "lucide-react";
+import { ChevronRight, Star } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface FilterSidebarProps {
   filters: {
@@ -108,45 +109,38 @@ export function FilterSidebar({ filters, onFilterChange }: FilterSidebarProps) {
     onFilterChange({ onSale: checked });
   };
 
+  if (isCategoriesLoading && !categories.length) {
+    return <FilterSidebarSkeleton />;
+  }
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-semibold mb-4">Filters</h3>
+    <div className="rounded-lg border bg-card/40 p-4 space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold">Filters</h3>
       </div>
 
       <details open>
-        <summary className="flex items-center justify-between cursor-pointer select-none">
+        <summary className="flex items-center justify-between cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
           <span className="font-medium">Categories</span>
           <Button variant="ghost" size="sm" onClick={(e) => { e.preventDefault(); onFilterChange({ categoryIds: undefined }); }}>Clear</Button>
         </summary>
         <div className="mt-3 space-y-2 min-h-[280px]">
-          {isCategoriesLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 10 }).map((_, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <Skeleton className="h-4 w-4 rounded" />
-                  <Skeleton className="h-4 w-3/4" />
-                </div>
-              ))}
-            </div>
-          ) : (
-            categories.map((category: any) => (
-              <CategoryNode
-                key={category.id}
-                node={category}
-                depth={0}
-                selectedIds={filters.categoryIds || []}
-                onToggle={handleNodeToggle}
-              />
-            ))
-          )}
+          {categories.map((category: any) => (
+            <CategoryNode
+              key={category.id}
+              node={category}
+              depth={0}
+              selectedIds={filters.categoryIds || []}
+              onToggle={handleNodeToggle}
+            />
+          ))}
         </div>
       </details>
 
       <Separator />
 
       <details open>
-        <summary className="flex items-center justify-between cursor-pointer select-none">
+        <summary className="flex items-center justify-between cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
           <span className="font-medium">Price Range</span>
           <Button variant="ghost" size="sm" onClick={(e) => { e.preventDefault(); onFilterChange({ minPrice: undefined, maxPrice: undefined }); }}>Clear</Button>
         </summary>
@@ -176,7 +170,7 @@ export function FilterSidebar({ filters, onFilterChange }: FilterSidebarProps) {
       <Separator />
 
       <details open>
-        <summary className="flex items-center justify-between cursor-pointer select-none">
+        <summary className="flex items-center justify-between cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
           <span className="font-medium">Minimum Rating</span>
           <Button
             variant="ghost"
@@ -231,7 +225,7 @@ export function FilterSidebar({ filters, onFilterChange }: FilterSidebarProps) {
       <Separator />
 
       <details open>
-        <summary className="flex items-center justify-between cursor-pointer select-none">
+        <summary className="flex items-center justify-between cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
           <span className="font-medium">Availability</span>
           <Button variant="ghost" size="sm" onClick={(e) => { e.preventDefault(); onFilterChange({ inStock: false }); }}>Clear</Button>
         </summary>
@@ -253,7 +247,7 @@ export function FilterSidebar({ filters, onFilterChange }: FilterSidebarProps) {
       <Separator />
 
       <details open>
-        <summary className="flex items-center justify-between cursor-pointer select-none">
+        <summary className="flex items-center justify-between cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
           <span className="font-medium">Deals</span>
           <Button variant="ghost" size="sm" onClick={(e) => { e.preventDefault(); onFilterChange({ onSale: false }); }}>Clear</Button>
         </summary>
@@ -284,6 +278,7 @@ function CategoryNode({
   onToggle: (node: any) => void;
 }) {
   const hasChildren = Array.isArray(node.children) && node.children.length > 0;
+  const [open, setOpen] = useState(false);
   const collectIds = (n: any): string[] => {
     const ids = [n.id];
     if (Array.isArray(n.children) && n.children.length) {
@@ -309,41 +304,61 @@ function CategoryNode({
     return sum;
   })(node);
 
+  useEffect(() => {
+    if (hasActive) setOpen(true);
+  }, [hasActive]);
+
   if (hasChildren) {
     return (
-      <details open={hasActive}>
-        <summary className="cursor-pointer select-none">
-          <div className="flex items-center space-x-2" style={{ marginLeft: depth * 12 }}>
-            <Checkbox
-              id={`category-${node.id}`}
-              checked={triState}
-              onCheckedChange={() => onToggle(node)}
-            />
-            <Label htmlFor={`category-${node.id}`} className="text-sm font-normal cursor-pointer flex-1">
-              {node.name}
-              {subtreeCount > 0 && (
-                <span className="text-muted-foreground ml-2">({subtreeCount})</span>
-              )}
-            </Label>
-          </div>
-        </summary>
-        <div className="mt-2 space-y-2">
-          {node.children.map((child: any) => (
-            <CategoryNode
-              key={child.id}
-              node={child}
-              depth={depth + 1}
-              selectedIds={selectedIds}
-              onToggle={onToggle}
-            />
-          ))}
+      <Collapsible open={open} onOpenChange={setOpen} className="group/collapsible">
+        <div
+          className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-muted/40"
+          style={{ marginLeft: depth * 12 }}
+        >
+          <Checkbox
+            id={`category-${node.id}`}
+            checked={triState}
+            onCheckedChange={() => onToggle(node)}
+          />
+          <Label htmlFor={`category-${node.id}`} className="text-sm font-normal cursor-pointer flex-1">
+            {node.name}
+            {subtreeCount > 0 && (
+              <span className="text-muted-foreground ml-2">({subtreeCount})</span>
+            )}
+          </Label>
+          <CollapsibleTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 shrink-0"
+            >
+              <ChevronRight className="h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+              <span className="sr-only">Toggle subcategories</span>
+            </Button>
+          </CollapsibleTrigger>
         </div>
-      </details>
+        <CollapsibleContent>
+          <div className="mt-2 space-y-2">
+            {node.children.map((child: any) => (
+              <CategoryNode
+                key={child.id}
+                node={child}
+                depth={depth + 1}
+                selectedIds={selectedIds}
+                onToggle={onToggle}
+              />
+            ))}
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
     );
   }
 
   return (
-    <div className="flex items-center space-x-2" style={{ marginLeft: depth * 12 }}>
+    <div
+      className="flex items-center space-x-2 rounded-md px-2 py-1 hover:bg-muted/40"
+      style={{ marginLeft: depth * 12 }}
+    >
       <Checkbox
         id={`category-${node.id}`}
         checked={triState}
@@ -355,6 +370,79 @@ function CategoryNode({
           <span className="text-muted-foreground ml-2">({Number(node.productCount || 0)})</span>
         )}
       </Label>
+    </div>
+  );
+}
+
+function FilterSidebarSkeleton() {
+  return (
+    <div className="rounded-lg border bg-card/40 p-4 space-y-6">
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-6 w-24" />
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-7 w-12" />
+        </div>
+        <div className="space-y-2 min-h-[280px]">
+          {Array.from({ length: 10 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <Skeleton className="h-4 w-4 rounded" />
+              <Skeleton className="h-4 w-3/4" />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <Separator />
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-4 w-28" />
+          <Skeleton className="h-7 w-12" />
+        </div>
+        <Skeleton className="h-4 w-full" />
+        <div className="grid grid-cols-2 gap-2">
+          <Skeleton className="h-9 w-full" />
+          <Skeleton className="h-9 w-full" />
+        </div>
+      </div>
+
+      <Separator />
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-7 w-12" />
+        </div>
+        <div className="space-y-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-5 w-3/4" />
+          ))}
+        </div>
+      </div>
+
+      <Separator />
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-7 w-12" />
+        </div>
+        <Skeleton className="h-5 w-2/3" />
+      </div>
+
+      <Separator />
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-4 w-16" />
+          <Skeleton className="h-7 w-12" />
+        </div>
+        <Skeleton className="h-5 w-2/3" />
+      </div>
     </div>
   );
 }

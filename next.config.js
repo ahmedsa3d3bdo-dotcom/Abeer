@@ -25,6 +25,7 @@ const nextConfig = {
     unoptimized: false,
     // Modern formats for better compression
     formats: ['image/avif', 'image/webp'],
+    qualities: [60, 75],
     // Device sizes for responsive images
     deviceSizes: [320, 420, 640, 768, 1024, 1280, 1536],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],

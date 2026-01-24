@@ -31,10 +31,17 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     description: siteDescription,
     icons: {
-      icon: "/Storefront/images/Logo.png",
-      shortcut: "/Storefront/images/Logo.png",
-      apple: "/Storefront/images/Logo.png",
+      icon: [
+        { url: "/favicon.ico" },
+        { url: "/Storefront/images/Logo.png" },
+      ],
+      shortcut: [
+        { url: "/favicon.ico" },
+        { url: "/Storefront/images/Logo.png" },
+      ],
+      apple: [{ url: "/Storefront/images/Logo.png" }],
     },
+    manifest: "/manifest.webmanifest",
     openGraph: {
       type: "website",
       url: baseUrl,

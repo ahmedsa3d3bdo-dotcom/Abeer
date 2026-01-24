@@ -176,7 +176,7 @@ export function HeroSection() {
                 quality={75}
                 fetchPriority={currentImage === 0 ? "high" : "auto"}
                 className="object-cover"
-                onLoadingComplete={() => {
+                onLoad={() => {
                   if (currentImage === 0 && !prefetchEnabled) setPrefetchEnabled(true);
                   if (previousImage === null) return;
                   if (isFading) return;
