@@ -24,7 +24,7 @@ export default function Icon() {
         }}
       >
         <img
-          src={`${baseUrl}/Storefront/images/Logo.png`}
+          src={`${baseUrl}/logo.png`}
           width={28}
           height={28}
           style={{ objectFit: "contain" }}

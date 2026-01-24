@@ -25,18 +25,18 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     theme_color: "#ffffff",
     icons: [
       {
-        src: `${baseUrl}/Storefront/images/Logo.png`,
-        sizes: "522x400",
+        src: `${baseUrl}/android-chrome-192x192.png`,
+        sizes: "192x192",
         type: "image/png",
       },
       {
-        src: `${baseUrl}/Storefront/images/Logo.png`,
-        sizes: "522x400",
+        src: `${baseUrl}/android-chrome-512x512.png`,
+        sizes: "512x512",
         type: "image/png",
       },
       {
-        src: `${baseUrl}/Storefront/images/Logo.png`,
-        sizes: "522x400",
+        src: `${baseUrl}/android-chrome-512x512.png`,
+        sizes: "512x512",
         type: "image/png",
         purpose: "maskable",
       },

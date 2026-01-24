@@ -24,7 +24,7 @@ export default function AppleIcon() {
         }}
       >
         <img
-          src={`${baseUrl}/Storefront/images/Logo.png`}
+          src={`${baseUrl}/logo.png`}
           width={140}
           height={140}
           style={{ objectFit: "contain" }}

@@ -32,14 +32,18 @@ export async function generateMetadata(): Promise<Metadata> {
     description: siteDescription,
     icons: {
       icon: [
+        { url: "/favicon-96x96.png", type: "image/png", sizes: "96x96" },
+        { url: "/favicon-48x48.png", type: "image/png", sizes: "48x48" },
+        { url: "/favicon-32x32.png", type: "image/png", sizes: "32x32" },
+        { url: "/favicon-16x16.png", type: "image/png", sizes: "16x16" },
         { url: "/favicon.ico" },
-        { url: "/Storefront/images/Logo.png" },
       ],
       shortcut: [
+        { url: "/favicon-48x48.png", type: "image/png", sizes: "48x48" },
+        { url: "/favicon-32x32.png", type: "image/png", sizes: "32x32" },
         { url: "/favicon.ico" },
-        { url: "/Storefront/images/Logo.png" },
       ],
-      apple: [{ url: "/Storefront/images/Logo.png" }],
+      apple: [{ url: "/apple-touch-icon.png", type: "image/png", sizes: "180x180" }],
     },
     manifest: "/manifest.webmanifest",
     openGraph: {
@@ -50,7 +54,7 @@ export async function generateMetadata(): Promise<Metadata> {
       siteName,
       images: [
         {
-          url: `${baseUrl}/Storefront/images/Logo.png`,
+          url: `${baseUrl}/logo.png`,
           alt: siteName,
         },
       ],
@@ -59,7 +63,7 @@ export async function generateMetadata(): Promise<Metadata> {
       card: "summary_large_image",
       title: siteName,
       description: siteDescription,
-      images: [`${baseUrl}/Storefront/images/Logo.png`],
+      images: [`${baseUrl}/logo.png`],
     },
   };
 }
@@ -109,7 +113,7 @@ export default async function StorefrontLayout({
                     "@id": `${baseUrl}/#organization`,
                     name: siteConfig.name,
                     url: baseUrl,
-                    logo: `${baseUrl}/Storefront/images/Logo.png`,
+                    logo: `${baseUrl}/logo.png`,
                   },
                   {
                     "@type": "WebSite",

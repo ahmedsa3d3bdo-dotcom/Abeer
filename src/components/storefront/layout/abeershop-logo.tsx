@@ -25,7 +25,7 @@ export function AbeerShopLogo({
     return (
         <div className={`flex items-center gap-2 ${className}`}>
             <img
-                src="/Storefront/images/Logo.png"
+                src="/logo.png"
                 alt="AbeerShop Logo"
                 className={`${heightClass} w-auto`}
                 loading="eager"
