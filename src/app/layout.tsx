@@ -64,7 +64,7 @@ export async function generateMetadata(): Promise<Metadata> {
       siteName,
       images: [
         {
-          url: `${baseUrl}/logo.png`,
+          url: `${baseUrl}/Storefront/images/abeershop_hero.png`,
           alt: siteName,
         },
       ],
@@ -73,7 +73,7 @@ export async function generateMetadata(): Promise<Metadata> {
       card: "summary_large_image",
       title: siteName,
       description: siteDescription,
-      images: [`${baseUrl}/logo.png`],
+      images: [`${baseUrl}/Storefront/images/abeershop_hero.png`],
     },
   };
 }
