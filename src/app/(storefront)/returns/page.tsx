@@ -5,7 +5,13 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { PageBreadcrumbs } from "@/components/storefront/static/breadcrumbs";
 
-export const metadata: Metadata = { title: "Returns & Exchanges" };
+export const metadata: Metadata = {
+  title: "Returns & Exchanges",
+  description: "Hassle-free returns within 30 days and free exchanges on eligible items.",
+  alternates: {
+    canonical: "/returns",
+  },
+};
 
 export default function ReturnsPage() {
   return (

@@ -4,7 +4,13 @@ import { PageBreadcrumbs } from "@/components/storefront/static/breadcrumbs";
 import { Toc } from "@/components/storefront/static/toc";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-export const metadata: Metadata = { title: "Privacy Policy" };
+export const metadata: Metadata = {
+  title: "Privacy Policy",
+  description: "Learn how we collect, use, and protect your personal information.",
+  alternates: {
+    canonical: "/privacy",
+  },
+};
 
 const LAST_UPDATED = "2025-11-09"; // TODO: replace with your official date
 

@@ -6,7 +6,13 @@ import { db } from "@/shared/db";
 import { shippingMethods } from "@/shared/db/schema/shipping";
 import { eq } from "drizzle-orm";
 
-export const metadata: Metadata = { title: "Shipping Information" };
+export const metadata: Metadata = {
+  title: "Shipping Information",
+  description: "Shipping methods, delivery time estimates, pricing, and tracking information.",
+  alternates: {
+    canonical: "/shipping",
+  },
+};
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";

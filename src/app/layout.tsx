@@ -37,9 +37,6 @@ export async function generateMetadata(): Promise<Metadata> {
       template: siteName ? `%s | ${siteName}` : "%s",
     },
     description: siteDescription,
-    alternates: {
-      canonical: baseUrl,
-    },
     icons: {
       icon: [
         { url: "/favicon-96x96.png", type: "image/png", sizes: "96x96" },

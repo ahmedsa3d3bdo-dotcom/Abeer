@@ -27,6 +27,18 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   
   try {
     const product: Product = await api.get(`/api/storefront/products/${slug}`);
+
+    const ogImages = (product.images || []).length
+      ? product.images.map((img) => ({
+          url: img.url?.startsWith("http") ? img.url : `${baseUrl}${img.url}`,
+          alt: img.altText || product.name,
+        }))
+      : [
+          {
+            url: `${baseUrl}/Storefront/images/abeershop_hero.png`,
+            alt: product.name,
+          },
+        ];
     
     return {
       title: product.metaTitle || product.name,
@@ -35,14 +47,17 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
         canonical: `${baseUrl}/product/${product.slug}`,
       },
       openGraph: {
-        type: "website",
+        type: "product",
         url: `${baseUrl}/product/${product.slug}`,
-        title: product.name,
-        description: product.shortDescription,
-        images: product.images.map((img) => ({
-          url: img.url?.startsWith("http") ? img.url : `${baseUrl}${img.url}`,
-          alt: img.altText || product.name,
-        })),
+        title: product.metaTitle || product.name,
+        description: product.metaDescription || product.shortDescription || product.description,
+        images: ogImages,
+      },
+      twitter: {
+        card: "summary_large_image",
+        title: product.metaTitle || product.name,
+        description: product.metaDescription || product.shortDescription || product.description,
+        images: ogImages.map((i) => i.url),
       },
     };
   } catch {
@@ -53,6 +68,18 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
           title: "Product Not Found",
         };
       }
+
+      const ogImages = (product.images || []).length
+        ? product.images.map((img) => ({
+            url: img.url?.startsWith("http") ? img.url : `${baseUrl}${img.url}`,
+            alt: img.altText || product.name,
+          }))
+        : [
+            {
+              url: `${baseUrl}/Storefront/images/abeershop_hero.png`,
+              alt: product.name,
+            },
+          ];
       return {
         title: product.metaTitle || product.name,
         description: product.metaDescription || product.shortDescription || product.description,
@@ -60,14 +87,17 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
           canonical: `${baseUrl}/product/${product.slug}`,
         },
         openGraph: {
-          type: "website",
+          type: "product",
           url: `${baseUrl}/product/${product.slug}`,
-          title: product.name,
-          description: product.shortDescription,
-          images: product.images.map((img) => ({
-            url: img.url?.startsWith("http") ? img.url : `${baseUrl}${img.url}`,
-            alt: img.altText || product.name,
-          })),
+          title: product.metaTitle || product.name,
+          description: product.metaDescription || product.shortDescription || product.description,
+          images: ogImages,
+        },
+        twitter: {
+          card: "summary_large_image",
+          title: product.metaTitle || product.name,
+          description: product.metaDescription || product.shortDescription || product.description,
+          images: ogImages.map((i) => i.url),
         },
       };
     } catch {

@@ -75,6 +75,9 @@ export default async function StorefrontLayout({
 }) {
   const configuredThemeModeRaw = (await settingsRepository.findByKey("storefront_theme_mode"))?.value;
   const configuredThemePresetRaw = (await settingsRepository.findByKey("storefront_theme_preset"))?.value;
+  const configuredSiteName = (await settingsRepository.findByKey("site_name"))?.value || siteConfig.name || "";
+  const configuredSiteDescription =
+    (await settingsRepository.findByKey("site_description"))?.value || siteConfig.description || "";
   const h = await headers();
   const host = h.get("x-forwarded-host") || h.get("host");
   const proto = h.get("x-forwarded-proto") || "https";
@@ -111,7 +114,7 @@ export default async function StorefrontLayout({
                   {
                     "@type": "Organization",
                     "@id": `${baseUrl}/#organization`,
-                    name: siteConfig.name,
+                    name: configuredSiteName,
                     url: baseUrl,
                     logo: `${baseUrl}/logo.png`,
                   },
@@ -119,8 +122,8 @@ export default async function StorefrontLayout({
                     "@type": "WebSite",
                     "@id": `${baseUrl}/#website`,
                     url: baseUrl,
-                    name: siteConfig.name,
-                    description: siteConfig.description,
+                    name: configuredSiteName,
+                    description: configuredSiteDescription,
                     publisher: {
                       "@id": `${baseUrl}/#organization`,
                     },

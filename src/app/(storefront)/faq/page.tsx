@@ -3,7 +3,13 @@ import { PageHeader } from "@/components/storefront/static/page-header";
 import { PageBreadcrumbs } from "@/components/storefront/static/breadcrumbs";
 import FaqClient from "@/components/storefront/static/faq-client";
 
-export const metadata: Metadata = { title: "FAQ" };
+export const metadata: Metadata = {
+  title: "FAQ",
+  description: "Find quick answers about orders, shipping, returns, payments, and product information.",
+  alternates: {
+    canonical: "/faq",
+  },
+};
 
 export default function FaqPage() {
   return (

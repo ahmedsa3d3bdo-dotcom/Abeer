@@ -4,9 +4,15 @@ import { PageBreadcrumbs } from "@/components/storefront/static/breadcrumbs";
 import { Toc } from "@/components/storefront/static/toc";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-export const metadata: Metadata = { title: "Terms of Service" };
+export const metadata: Metadata = {
+  title: "Terms of Service",
+  description: "The terms and conditions that govern your use of our services and purchases.",
+  alternates: {
+    canonical: "/terms",
+  },
+};
 
-const LAST_UPDATED = "2025-11-09"; // TODO: replace with your official date
+const LAST_UPDATED = "2026-01-01"; // TODO: replace with your official date
 
 export default function TermsPage() {
   return (

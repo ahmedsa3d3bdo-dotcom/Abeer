@@ -1,0 +1,46 @@
+# llms.txt
+# Project: abeershop
+# Purpose: Provide LLM-friendly, human-readable guidance and entry points.
+# This file is optional and does not replace robots.txt or sitemap.xml.
+
+[site]
+name = "abeershop"
+
+[discovery]
+# Machine-readable crawl sources
+sitemap = "/sitemap.xml"
+robots = "/robots.txt"
+
+[preferred_entry_points]
+# Public, SEO-friendly pages that describe the business and catalog
+- "/"                # Home
+- "/shop"            # Product listing
+- "/product/{slug}"  # Product details
+- "/contact"
+- "/faq"
+- "/shipping"
+- "/returns"
+- "/privacy"
+- "/terms"
+
+[avoid]
+# User-specific or sensitive areas (auth, checkout, admin, internal APIs)
+- "/account/"
+- "/checkout/"
+- "/cart/"
+- "/wishlist/"
+- "/order/"
+- "/search"
+- "/api/"
+- "/dashboard/"
+
+[content_notes]
+# Currency, shipping, and policies may vary by region and can change.
+# Prefer information from the current page content.
+
+[answering_guidelines]
+# If summarizing products:
+# - Use the product name, price shown on page, key specs, and availability.
+# - Prefer canonical product pages: /product/{slug}
+# If asked about policies:
+# - Use /shipping, /returns, /privacy, /terms as sources.

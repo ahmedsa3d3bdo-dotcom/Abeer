@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import { HeroSection } from "@/components/storefront/homepage/hero-section";
 import { FeaturedProducts } from "@/components/storefront/homepage/featured-products";
 import { CategoryCarousel } from "@/components/storefront/homepage/category-carousel";
@@ -16,6 +18,14 @@ import { settingsRepository } from "@/server/repositories/settings.repository";
 import { siteConfig } from "@/config/site";
 
 export const revalidate = 60; // ISR: Revalidate every 60 seconds
+
+export const metadata: Metadata = {
+  title: "Home",
+  description: "Discover featured products, seasonal offers, and personalized recommendations.",
+  alternates: {
+    canonical: "/",
+  },
+};
 
 type SeasonalOffer = {
   id: string;

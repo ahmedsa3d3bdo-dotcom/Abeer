@@ -4,7 +4,13 @@ import { Mail, MessageSquare, Phone } from "lucide-react";
 import { PageBreadcrumbs } from "@/components/storefront/static/breadcrumbs";
 import { settingsRepository } from "@/server/repositories/settings.repository";
 
-export const metadata: Metadata = { title: "Contact Us" };
+export const metadata: Metadata = {
+  title: "Contact Us",
+  description: "Get help with orders, shipping, returns, and product questions. Reach us by email, phone, or chat.",
+  alternates: {
+    canonical: "/contact",
+  },
+};
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";

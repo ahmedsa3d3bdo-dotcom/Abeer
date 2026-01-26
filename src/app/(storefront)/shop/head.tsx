@@ -62,8 +62,6 @@ export default async function Head({
 
   return (
     <>
-      <link rel="canonical" href={canonical} />
-      <meta name="robots" content={shouldNoindex ? "noindex,follow" : "index,follow"} />
       {prevHref ? <link rel="prev" href={prevHref} /> : null}
       {nextHref ? <link rel="next" href={nextHref} /> : null}
     </>
