@@ -198,6 +198,8 @@ export class StorefrontCartService {
           quantity: Number(item.quantity),
           unitPrice: parseFloat(item.unitPrice),
           totalPrice: parseFloat(item.totalPrice),
+          isGift: Boolean((item as any).isGift),
+          giftDiscountId: (item as any).giftDiscountId ? String((item as any).giftDiscountId) : undefined,
           image: image || "/placeholder-product.svg",
           maxQuantity: Number(item.maxQuantity) || 0,
         };

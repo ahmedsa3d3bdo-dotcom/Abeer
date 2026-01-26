@@ -58,10 +58,9 @@ export function ProductInfo({ product }: ProductInfoProps) {
     let aborted = false;
     (async () => {
       try {
-        const res = await fetch("/api/storefront/offers", { cache: "no-store" });
+        const res = await fetch("/api/v1/discounts?isAutomatic=true&status=active&activeNow=true&limit=100", { cache: "no-store" });
         const data = await res.json();
-        if (!res.ok || !data?.success) return;
-        const items: any[] = Array.isArray(data.data?.items) ? data.data.items : [];
+        const items: any[] = Array.isArray(data?.data?.items) ? data.data.items : [];
         const bundles = items.filter((o) => (o?.metadata?.offerKind === "bundle"));
         if (!bundles.length) return;
         const catIds = new Set((product.categories || []).map((c) => c.id));

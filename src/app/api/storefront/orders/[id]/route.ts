@@ -46,6 +46,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         quantity: schema.orderItems.quantity,
         unitPrice: schema.orderItems.unitPrice,
         totalPrice: schema.orderItems.totalPrice,
+        productPrice: schema.products.price,
+        variantPrice: schema.productVariants.price,
         variantImage: schema.productVariants.image,
         primaryImage: schema.productImages.url,
       })
@@ -109,6 +111,31 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       shipping: parseFloat(order.shippingAmount as any),
       discount: parseFloat(order.discountAmount as any),
       total: parseFloat(order.totalAmount as any),
+      discounts: await (async () => {
+        const rows = await db
+          .select({
+            id: schema.orderDiscounts.id,
+            discountId: schema.orderDiscounts.discountId,
+            code: schema.orderDiscounts.code,
+            amount: schema.orderDiscounts.amount,
+            discountName: schema.discounts.name,
+            discountType: schema.discounts.type,
+            discountValue: schema.discounts.value,
+          })
+          .from(schema.orderDiscounts)
+          .leftJoin(schema.discounts, eq(schema.discounts.id, schema.orderDiscounts.discountId))
+          .where(eq(schema.orderDiscounts.orderId, order.id as any));
+
+        return rows.map((r) => ({
+          id: r.id,
+          discountId: r.discountId,
+          code: r.code,
+          amount: parseFloat(r.amount as any),
+          name: r.discountName,
+          type: r.discountType,
+          value: r.discountValue != null ? parseFloat(r.discountValue as any) : null,
+        }));
+      })(),
       items: items.map((it) => ({
         id: it.id,
         productId: it.productId,
@@ -120,6 +147,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         quantity: it.quantity,
         price: parseFloat(it.unitPrice as any),
         total: parseFloat(it.totalPrice as any),
+        referencePrice: parseFloat(((it as any).variantPrice ?? (it as any).productPrice ?? "0") as any),
       })),
       shipments: shipments.map((s) => ({
         id: s.id,

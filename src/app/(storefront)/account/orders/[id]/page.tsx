@@ -77,8 +77,15 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       subtotal: Number(order?.subtotal || 0),
       shipping: Number(order?.shipping || 0),
       tax: Number(order?.tax || 0),
+      discount: Number(order?.discount || 0),
       total: Number(order?.total || 0),
     };
+
+    const discountLines: any[] = Array.isArray(order?.discounts)
+      ? order.discounts
+      : totals.discount > 0
+        ? [{ id: "order-discount", code: null, amount: totals.discount }]
+        : [];
 
     return (
       <div className="invoice-print-root mx-auto max-w-4xl p-6 print:p-0">
@@ -166,6 +173,15 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               <span className="text-muted-foreground">Subtotal</span>
               <span>${totals.subtotal.toFixed(2)}</span>
             </div>
+            {discountLines.map((d: any) => (
+              <div key={String(d.id)} className="flex w-full max-w-sm justify-between">
+                <span className="text-muted-foreground">
+                  Discount
+                  {d?.code ? ` (${String(d.code)})` : d?.name ? ` (${String(d.name)})` : ""}
+                </span>
+                <span>-${Number(d?.amount || 0).toFixed(2)}</span>
+              </div>
+            ))}
             <div className="flex w-full max-w-sm justify-between">
               <span className="text-muted-foreground">Shipping</span>
               <span>${totals.shipping.toFixed(2)}</span>
@@ -226,6 +242,12 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
   if (!order) {
     return <div className="text-sm text-muted-foreground">Order not found</div>;
   }
+
+  const discountLines: any[] = Array.isArray(order?.discounts)
+    ? order.discounts
+    : Number(order?.discount || 0) > 0
+      ? [{ id: "order-discount", code: null, amount: Number(order?.discount || 0) }]
+      : [];
 
   return (
     <div className="space-y-6">
@@ -292,6 +314,9 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             <>
               <div className="space-y-4">
                 {order.items.map((item: any) => (
+                  (() => {
+                    const isGift = Number(item.price ?? 0) === 0 && Number(item.total ?? 0) === 0;
+                    return (
                   <div key={item.id} className="flex gap-4">
                     <Link href={item.productSlug ? `/product/${item.productSlug}` : item.productId ? `/product/${item.productId}` : "#"} className="relative h-20 w-20 rounded bg-muted flex-shrink-0">
                       <Image
@@ -306,6 +331,9 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                       <Link href={item.productSlug ? `/product/${item.productSlug}` : item.productId ? `/product/${item.productId}` : "#"} className="font-semibold hover:underline">
                         {item.name}
                       </Link>
+                      {isGift ? (
+                        <p className="text-xs font-medium text-green-700 dark:text-green-300 mt-1">Free gift</p>
+                      ) : null}
                       <p className="text-sm text-muted-foreground">
                         {item.variant || ""}
                       </p>
@@ -313,15 +341,32 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                         SKU: {item.sku}
                       </p>
                       <p className="text-sm mt-1">
-                        Qty: {item.quantity} × ${item.price.toFixed(2)}
+                        Qty: {item.quantity} × {isGift ? "FREE" : `$${item.price.toFixed(2)}`}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="font-semibold">${item.total.toFixed(2)}</p>
+                      <p className={isGift ? "font-semibold text-green-700 dark:text-green-300" : "font-semibold"}>
+                        {isGift ? "FREE" : `$${item.total.toFixed(2)}`}
+                      </p>
                     </div>
                   </div>
+                    );
+                  })()
                 ))}
               </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Subtotal</span>
+                <span>${Number(order.subtotal || 0).toFixed(2)}</span>
+              </div>
+              {discountLines.map((d: any) => (
+                <div key={String(d.id)} className="flex justify-between">
+                  <span className="text-muted-foreground">
+                    Discount
+                    {d?.code ? ` (${String(d.code)})` : d?.name ? ` (${String(d.name)})` : ""}
+                  </span>
+                  <span>-${Number(d?.amount || 0).toFixed(2)}</span>
+                </div>
+              ))}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Shipping</span>
                 <span>${Number(order.shipping || 0).toFixed(2)}</span>

@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 export type UniversalBadgeKind =
   | "status"
   | "type"
+  | "discount_kind"
   | "visibility"
   | "scope"
   | "sale"
@@ -45,6 +46,15 @@ const SOLID = {
 function styleFor(kind: UniversalBadgeKind, value: string) {
   // normalize common boolean-like values
   const v = normalize(value);
+
+  if (kind === "discount_kind") {
+    if (v === "coupon") return SOLID.blue;
+    if (v === "scheduled_offer") return SOLID.emerald;
+    if (v === "bxgy_generic") return SOLID.amber;
+    if (v === "bxgy_bundle") return SOLID.violet;
+    if (v === "bundle_offer") return SOLID.slate;
+    return SOLID.slate;
+  }
 
   if (kind === "status" || kind === "type") {
     if (kind === "type") {

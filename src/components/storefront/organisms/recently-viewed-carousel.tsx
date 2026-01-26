@@ -18,6 +18,28 @@ export function RecentlyViewedCarousel() {
         const raw = localStorage.getItem(key) || "[]";
         const arr: Array<{ id: string; name: string; slug: string; price: number | string; primaryImage?: string; rating?: number; reviewCount?: number }> = JSON.parse(raw);
 
+        const ids = (arr || []).map((p) => String(p.id)).filter(Boolean);
+        if (ids.length) {
+          try {
+            const qs = new URLSearchParams();
+            qs.set("limit", String(Math.min(12, ids.length)));
+            qs.set("sortBy", "newest");
+            qs.set("productIds", ids.slice(0, 50).join(","));
+            const res = await fetch(`/api/storefront/products?${qs.toString()}`, { cache: "no-store" });
+            const data = await res.json();
+            if (!cancelled && res.ok && data?.success && data?.data?.items) {
+              const fetched: ProductCardType[] = Array.isArray(data.data.items) ? data.data.items : [];
+              const order = new Map<string, number>();
+              ids.forEach((id, idx) => order.set(String(id), idx));
+              const sorted = [...fetched]
+                .sort((a, b) => (order.get(String(a.id)) ?? 0) - (order.get(String(b.id)) ?? 0))
+                .slice(0, 12);
+              setItems(sorted);
+              return;
+            }
+          } catch {}
+        }
+
         const needsHydrate = (arr || []).some((p) => p.rating == null || p.reviewCount == null);
 
         if (needsHydrate) {

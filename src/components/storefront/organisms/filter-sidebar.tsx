@@ -20,6 +20,7 @@ interface FilterSidebarProps {
     maxPrice?: number;
     minRating?: number;
     categoryIds?: string[];
+    offerId?: string;
     inStock?: boolean;
     onSale?: boolean;
   };
@@ -33,6 +34,15 @@ export function FilterSidebar({ filters, onFilterChange }: FilterSidebarProps) {
   ]);
   const [minInput, setMinInput] = useState<number | "">(filters.minPrice ?? "");
   const [maxInput, setMaxInput] = useState<number | "">(filters.maxPrice ?? "");
+
+  const { data: offersData, isLoading: isOffersLoading } = useQuery<{
+    items: Array<{ id: string; name: string; type: string; value: string; metadata?: any }>;
+  }>({
+    queryKey: ["offers"],
+    queryFn: () => api.get("/api/storefront/offers"),
+  });
+
+  const offers = offersData?.items || [];
 
   // Fetch categories
   const { data: categoriesData, isLoading: isCategoriesLoading } = useQuery<{
@@ -248,18 +258,62 @@ export function FilterSidebar({ filters, onFilterChange }: FilterSidebarProps) {
 
       <details open>
         <summary className="flex items-center justify-between cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
-          <span className="font-medium">Deals</span>
-          <Button variant="ghost" size="sm" onClick={(e) => { e.preventDefault(); onFilterChange({ onSale: false }); }}>Clear</Button>
+          <span className="font-medium">Offers and deals</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.preventDefault();
+              onFilterChange({ offerId: undefined, onSale: false });
+            }}
+          >
+            Clear
+          </Button>
         </summary>
-        <div className="flex items-center space-x-2 mt-3">
-          <Checkbox
-            id="on-sale"
-            checked={filters.onSale || false}
-            onCheckedChange={handleOnSaleChange}
-          />
-          <Label htmlFor="on-sale" className="text-sm font-normal cursor-pointer">
-            On sale only
-          </Label>
+        <div className="mt-3 space-y-4">
+          <div>
+            {isOffersLoading && !offers.length ? (
+              <div className="space-y-2">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-5 w-3/4" />
+                ))}
+              </div>
+            ) : offers.length ? (
+              <RadioGroup
+                value={filters.offerId ? String(filters.offerId) : "any"}
+                onValueChange={(val) => onFilterChange({ offerId: val === "any" ? undefined : String(val) })}
+                className="space-y-2"
+              >
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem id="offer-any" value="any" />
+                  <Label htmlFor="offer-any" className="text-sm font-normal cursor-pointer">
+                    Any offer
+                  </Label>
+                </div>
+                {offers.map((o) => (
+                  <div className="flex items-center gap-2" key={o.id}>
+                    <RadioGroupItem id={`offer-${o.id}`} value={o.id} />
+                    <Label htmlFor={`offer-${o.id}`} className="text-sm font-normal cursor-pointer">
+                      {o.name}
+                    </Label>
+                  </div>
+                ))}
+              </RadioGroup>
+            ) : (
+              <div className="text-sm text-muted-foreground">No active offers.</div>
+            )}
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="on-sale"
+              checked={filters.onSale || false}
+              onCheckedChange={handleOnSaleChange}
+            />
+            <Label htmlFor="on-sale" className="text-sm font-normal cursor-pointer">
+              On sale only
+            </Label>
+          </div>
         </div>
       </details>
     </div>

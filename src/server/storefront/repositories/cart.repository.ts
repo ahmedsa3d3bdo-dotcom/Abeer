@@ -1,6 +1,7 @@
 import { db } from "@/shared/db";
 import * as schema from "@/shared/db/schema";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { storefrontOffersService } from "../services/offers.service";
 
 /**
  * Storefront Cart Repository
@@ -15,6 +16,188 @@ export class StorefrontCartRepository {
       .toUpperCase();
   }
 
+  private async getGiftSuppressions(cartId: string): Promise<Record<string, any>> {
+    const [row] = await db
+      .select({ giftSuppressions: schema.carts.giftSuppressions })
+      .from(schema.carts)
+      .where(eq(schema.carts.id, cartId))
+      .limit(1);
+    return ((row as any)?.giftSuppressions as any) || {};
+  }
+
+  private suppressionKey(discountId: string, productId: string) {
+    return `${String(discountId)}:${String(productId)}`;
+  }
+
+  private async setGiftSuppression(cartId: string, discountId: string, productId: string, suppressed: boolean) {
+    const key = this.suppressionKey(discountId, productId);
+    if (suppressed) {
+      await (db as any).execute(sql`
+        update ${schema.carts}
+        set gift_suppressions = coalesce(gift_suppressions, '{}'::jsonb) || jsonb_build_object(${key}, true)
+        where ${schema.carts.id} = ${cartId}
+      `);
+      return;
+    }
+    await (db as any).execute(sql`
+      update ${schema.carts}
+      set gift_suppressions = coalesce(gift_suppressions, '{}'::jsonb) - ${key}
+      where ${schema.carts.id} = ${cartId}
+    `);
+  }
+
+  private async clearGiftSuppressionsForDiscount(cartId: string, discountId: string) {
+    const cur = await this.getGiftSuppressions(cartId);
+    const prefix = `${String(discountId)}:`;
+    const keys = Object.keys(cur || {}).filter((k) => k.startsWith(prefix));
+    if (!keys.length) return;
+    const next: Record<string, any> = { ...(cur || {}) };
+    for (const k of keys) delete next[k];
+    await db
+      .update(schema.carts)
+      .set({ giftSuppressions: next as any, updatedAt: new Date() } as any)
+      .where(eq(schema.carts.id, cartId));
+  }
+
+  private async ensureBxgyBundleGifts(cartId: string) {
+    const now = new Date();
+    const promos = await db
+      .select()
+      .from(schema.discounts)
+      .where(
+        sql`${schema.discounts.isAutomatic} = true and ${schema.discounts.status} = 'active' and (${schema.discounts.startsAt} is null or ${schema.discounts.startsAt} <= ${now}) and (${schema.discounts.endsAt} is null or ${schema.discounts.endsAt} >= ${now}) and coalesce(${schema.discounts.metadata} ->> 'kind', '') = 'deal' and coalesce(${schema.discounts.metadata} ->> 'offerKind', '') = 'bxgy_bundle'`,
+      );
+    if (!promos.length) return;
+
+    const items = await db
+      .select({
+        id: schema.cartItems.id,
+        productId: schema.cartItems.productId,
+        variantId: schema.cartItems.variantId,
+        quantity: schema.cartItems.quantity,
+        unitPrice: schema.cartItems.unitPrice,
+        isGift: schema.cartItems.isGift,
+        giftDiscountId: schema.cartItems.giftDiscountId,
+      })
+      .from(schema.cartItems)
+      .where(eq(schema.cartItems.cartId, cartId));
+
+    const suppressions = await this.getGiftSuppressions(cartId);
+
+    for (const disc of promos as any[]) {
+      const discId = String(disc.id);
+      const md: any = disc.metadata || null;
+      const spec = md?.bxgyBundle || md?.bundleBxgy || {};
+      const buyList: any[] = Array.isArray(spec?.buy) ? spec.buy : [];
+      const getList: any[] = Array.isArray(spec?.get) ? spec.get : [];
+      if (!buyList.length || !getList.length) continue;
+
+      // Compute applications based on non-gift quantities
+      const qtyByProduct = new Map<string, number>();
+      for (const it of items as any[]) {
+        if (it.isGift) continue;
+        const pid = it.productId ? String(it.productId) : "";
+        if (!pid) continue;
+        qtyByProduct.set(pid, (qtyByProduct.get(pid) || 0) + Number(it.quantity || 0));
+      }
+
+      let applications = Number.POSITIVE_INFINITY;
+      for (const line of buyList) {
+        const pid = String(line?.productId || "");
+        const req = Number(line?.quantity || 0);
+        if (!pid || !Number.isFinite(req) || req <= 0) {
+          applications = 0;
+          break;
+        }
+        const have = qtyByProduct.get(pid) || 0;
+        applications = Math.min(applications, Math.floor(have / req));
+      }
+      if (!Number.isFinite(applications) || applications <= 0) {
+        // Not qualified: remove any existing gifts for this discount and clear suppressions
+        const giftIds = (items as any[])
+          .filter((it) => Boolean(it.isGift) && String(it.giftDiscountId || "") === discId)
+          .map((it) => it.id);
+        if (giftIds.length) {
+          await db.delete(schema.cartItems).where(inArray(schema.cartItems.id, giftIds));
+        }
+        await this.clearGiftSuppressionsForDiscount(cartId, discId);
+        continue;
+      }
+
+      for (const line of getList) {
+        const productId = String(line?.productId || "");
+        const per = Number(line?.quantity || 0);
+        if (!productId || !Number.isFinite(per) || per <= 0) continue;
+        const desiredQty = per * applications;
+        if (desiredQty <= 0) continue;
+
+        const key = this.suppressionKey(discId, productId);
+        if (suppressions && suppressions[key]) {
+          // If suppressed, remove any currently-present gifts for this product/discount.
+          const existingGiftIds = (items as any[])
+            .filter(
+              (it) =>
+                Boolean(it.isGift) &&
+                String(it.giftDiscountId || "") === discId &&
+                String(it.productId || "") === productId,
+            )
+            .map((it) => it.id);
+          if (existingGiftIds.length) {
+            await db.delete(schema.cartItems).where(inArray(schema.cartItems.id, existingGiftIds));
+          }
+          continue;
+        }
+
+        const existingGift = (items as any[]).find(
+          (it) =>
+            Boolean(it.isGift) &&
+            String(it.giftDiscountId || "") === discId &&
+            String(it.productId || "") === productId,
+        );
+        const existingQty = existingGift ? Number(existingGift.quantity || 0) : 0;
+
+        if (!existingGift) {
+          const [prod] = await db
+            .select({ name: schema.products.name, sku: schema.products.sku, price: schema.products.price })
+            .from(schema.products)
+            .where(eq(schema.products.id, productId as any))
+            .limit(1);
+          if (!prod?.name) continue;
+
+          const unitPrice = parseFloat(String((prod as any).price || 0));
+          if (!Number.isFinite(unitPrice)) continue;
+
+          await db.insert(schema.cartItems).values({
+            cartId: cartId as any,
+            productId: productId as any,
+            variantId: null,
+            productName: String(prod.name),
+            variantName: null,
+            sku: String(prod.sku || productId),
+            quantity: desiredQty,
+            unitPrice: "0.00",
+            totalPrice: "0.00",
+            isGift: true,
+            giftDiscountId: discId as any,
+          } as any);
+        } else {
+          const existingUnit = parseFloat(String((existingGift as any).unitPrice || 0));
+          const existingTotal = parseFloat(String((existingGift as any).totalPrice || 0));
+          const shouldNormalize =
+            existingQty !== desiredQty ||
+            (Number.isFinite(existingUnit) && Number(existingUnit.toFixed(2)) !== 0) ||
+            (Number.isFinite(existingTotal) && Number(existingTotal.toFixed(2)) !== 0);
+
+          if (!shouldNormalize) continue;
+          await db
+            .update(schema.cartItems)
+            .set({ quantity: desiredQty, unitPrice: "0.00", totalPrice: "0.00" } as any)
+            .where(eq(schema.cartItems.id, existingGift.id));
+        }
+      }
+    }
+  }
+
   private async getCartItemsForDiscount(cartId: string) {
     return await db
       .select({
@@ -23,7 +206,7 @@ export class StorefrontCartRepository {
         unitPrice: schema.cartItems.unitPrice,
       })
       .from(schema.cartItems)
-      .where(eq(schema.cartItems.cartId, cartId));
+      .where(and(eq(schema.cartItems.cartId, cartId), eq(schema.cartItems.isGift, false)));
   }
 
   private async getQualifyingProductIds(disc: any): Promise<Set<string> | null> {
@@ -52,7 +235,120 @@ export class StorefrontCartRepository {
     return new Set<string>();
   }
 
+  private async getTargetProductIdsFromRelations(discountId: string): Promise<Set<string> | null> {
+    const prodRows = await db
+      .select({ pid: schema.discountProducts.productId })
+      .from(schema.discountProducts)
+      .where(eq(schema.discountProducts.discountId, discountId));
+    const productIds = prodRows.map((r) => String(r.pid)).filter(Boolean);
+
+    const catRows = await db
+      .select({ cid: schema.discountCategories.categoryId })
+      .from(schema.discountCategories)
+      .where(eq(schema.discountCategories.discountId, discountId));
+    const categoryIds = catRows.map((r) => String(r.cid)).filter(Boolean);
+
+    let fromCategories: string[] = [];
+    if (categoryIds.length) {
+      const prodInCats = await db
+        .select({ pid: schema.productCategories.productId })
+        .from(schema.productCategories)
+        .where(sql`${schema.productCategories.categoryId} in ${categoryIds}`);
+      fromCategories = prodInCats.map((r) => String(r.pid)).filter(Boolean);
+    }
+
+    const all = Array.from(new Set([...productIds, ...fromCategories]));
+    if (!all.length) return null;
+    return new Set(all);
+  }
+
   private async evaluateDiscount(items: any[], disc: any): Promise<number> {
+    const md: any = disc.metadata || null;
+    if (md?.kind === "deal" && md?.offerKind === "bxgy_generic") {
+      const bxgy = md?.bxgy || md?.bxgyGeneric || {};
+      const buyQty = Number(bxgy?.buyQty || 0);
+      const getQty = Number(bxgy?.getQty || 0);
+      if (!Number.isFinite(buyQty) || !Number.isFinite(getQty) || buyQty <= 0 || getQty <= 0) return 0;
+
+      const targets = await this.getTargetProductIdsFromRelations(String(disc.id));
+      const eligibleGroups: Array<{ unit: number; qty: number }> = [];
+      let eligibleQty = 0;
+      for (const it of items) {
+        const pid = it.productId ? String(it.productId) : "";
+        if (!pid) continue;
+        if (targets && !targets.has(pid)) continue;
+        const unit = parseFloat(String(it.unitPrice));
+        const qty = Number(it.quantity || 0);
+        if (!Number.isFinite(unit) || unit <= 0 || !Number.isFinite(qty) || qty <= 0) continue;
+        eligibleGroups.push({ unit, qty });
+        eligibleQty += qty;
+      }
+      if (eligibleQty < buyQty + getQty) return 0;
+
+      const applications = Math.floor(eligibleQty / (buyQty + getQty));
+      const freeUnits = applications * getQty;
+      if (freeUnits <= 0) return 0;
+
+      eligibleGroups.sort((a, b) => a.unit - b.unit);
+      let remaining = freeUnits;
+      let discount = 0;
+      for (const g of eligibleGroups) {
+        if (remaining <= 0) break;
+        const take = Math.min(remaining, g.qty);
+        discount += take * g.unit;
+        remaining -= take;
+      }
+      return Number(discount.toFixed(2));
+    }
+
+    if (md?.kind === "deal" && md?.offerKind === "bxgy_bundle") {
+      const spec = md?.bxgyBundle || md?.bundleBxgy || {};
+      const buyList: any[] = Array.isArray(spec?.buy) ? spec.buy : [];
+      const getList: any[] = Array.isArray(spec?.get) ? spec.get : [];
+      if (!buyList.length || !getList.length) return 0;
+
+      const qtyByProduct = new Map<string, number>();
+      const groupsByProduct = new Map<string, Array<{ unit: number; qty: number }>>();
+      for (const it of items) {
+        const pid = it.productId ? String(it.productId) : "";
+        if (!pid) continue;
+        const unit = parseFloat(String(it.unitPrice));
+        const qty = Number(it.quantity || 0);
+        if (!Number.isFinite(unit) || unit <= 0 || !Number.isFinite(qty) || qty <= 0) continue;
+        qtyByProduct.set(pid, (qtyByProduct.get(pid) || 0) + qty);
+        const arr = groupsByProduct.get(pid) || [];
+        arr.push({ unit, qty });
+        groupsByProduct.set(pid, arr);
+      }
+
+      let applications = Number.POSITIVE_INFINITY;
+      for (const line of buyList) {
+        const pid = String(line?.productId || "");
+        const req = Number(line?.quantity || 0);
+        if (!pid || !Number.isFinite(req) || req <= 0) return 0;
+        const have = qtyByProduct.get(pid) || 0;
+        applications = Math.min(applications, Math.floor(have / req));
+      }
+      if (!Number.isFinite(applications) || applications <= 0) return 0;
+
+      let discount = 0;
+      for (const line of getList) {
+        const pid = String(line?.productId || "");
+        const per = Number(line?.quantity || 0);
+        if (!pid || !Number.isFinite(per) || per <= 0) return 0;
+        let free = per * applications;
+        if (free <= 0) continue;
+        const groups = (groupsByProduct.get(pid) || []).slice().sort((a, b) => a.unit - b.unit);
+        for (const g of groups) {
+          if (free <= 0) break;
+          const take = Math.min(free, g.qty);
+          discount += take * g.unit;
+          free -= take;
+        }
+      }
+      return Number(discount.toFixed(2));
+    }
+
     const valueNum = parseFloat(String(disc.value || "0"));
     const qualifying = await this.getQualifyingProductIds(disc);
 
@@ -72,7 +368,6 @@ export class StorefrontCartRepository {
     const minSubtotal = disc.minSubtotal ? parseFloat(String(disc.minSubtotal)) : 0;
     if (minSubtotal > 0 && qSubtotal < minSubtotal) return 0;
 
-    const md: any = disc.metadata || null;
     if (md && md.offerKind === "bundle" && md.bundle?.requiredQty) {
       if (qQty < Number(md.bundle.requiredQty)) return 0;
     }
@@ -101,6 +396,10 @@ export class StorefrontCartRepository {
       .where(sql`${schema.discounts.code} ILIKE ${code}`)
       .limit(1);
     if (!disc?.id) throw new Error("Invalid discount code");
+
+    if (Boolean((disc as any)?.isAutomatic)) {
+      throw new Error("This discount is automatic and can't be applied as a code");
+    }
 
     if (disc.scope === "collections") {
       throw new Error("This discount is limited to collections and can't be applied yet");
@@ -172,6 +471,11 @@ export class StorefrontCartRepository {
       }
 
       if (!disc?.id) {
+        await this.clearDiscount(cartId);
+        return { amount: 0 };
+      }
+
+      if (Boolean((disc as any)?.isAutomatic)) {
         await this.clearDiscount(cartId);
         return { amount: 0 };
       }
@@ -296,6 +600,8 @@ export class StorefrontCartRepository {
         quantity: schema.cartItems.quantity,
         unitPrice: schema.cartItems.unitPrice,
         totalPrice: schema.cartItems.totalPrice,
+        isGift: schema.cartItems.isGift,
+        giftDiscountId: schema.cartItems.giftDiscountId,
         image: sql<string>`coalesce(
           (
             select pv.image
@@ -357,8 +663,13 @@ export class StorefrontCartRepository {
     sku: string;
     quantity: number;
     unitPrice: number;
+    isGift?: boolean;
+    giftDiscountId?: string;
   }) {
-    const totalPrice = params.unitPrice * params.quantity;
+    const isGift = Boolean(params.isGift);
+
+    const effectiveUnitPrice = isGift ? 0 : params.unitPrice;
+    const totalPrice = effectiveUnitPrice * params.quantity;
 
     // Check if item already exists
     const existingItem = await db
@@ -370,7 +681,13 @@ export class StorefrontCartRepository {
           eq(schema.cartItems.productId, params.productId),
           params.variantId
             ? eq(schema.cartItems.variantId, params.variantId)
-            : sql`${schema.cartItems.variantId} is null`
+            : isNull(schema.cartItems.variantId),
+          eq(schema.cartItems.isGift, isGift),
+          isGift
+            ? (params.giftDiscountId
+                ? eq(schema.cartItems.giftDiscountId, params.giftDiscountId as any)
+                : isNull(schema.cartItems.giftDiscountId))
+            : isNull(schema.cartItems.giftDiscountId),
         )
       )
       .limit(1);
@@ -383,7 +700,8 @@ export class StorefrontCartRepository {
         .update(schema.cartItems)
         .set({
           quantity: newQuantity,
-          totalPrice: (params.unitPrice * newQuantity).toFixed(2),
+          unitPrice: effectiveUnitPrice.toFixed(2),
+          totalPrice: (effectiveUnitPrice * newQuantity).toFixed(2),
         })
         .where(eq(schema.cartItems.id, existingItem[0].id))
         .returning();
@@ -399,8 +717,10 @@ export class StorefrontCartRepository {
           variantName: params.variantName || null,
           sku: params.sku,
           quantity: params.quantity,
-          unitPrice: params.unitPrice.toFixed(2),
+          unitPrice: effectiveUnitPrice.toFixed(2),
           totalPrice: totalPrice.toFixed(2),
+          isGift: Boolean(params.isGift),
+          giftDiscountId: params.giftDiscountId ? (params.giftDiscountId as any) : null,
         })
         .returning();
     }
@@ -425,6 +745,30 @@ export class StorefrontCartRepository {
       throw new Error("Cart item not found");
     }
 
+    if (Boolean((item as any).isGift)) {
+      const nextQty = Math.max(0, Math.min(Number(item.quantity || 0), Number(quantity || 0)));
+      if (nextQty <= 0) {
+        await db.delete(schema.cartItems).where(eq(schema.cartItems.id, itemId));
+        if ((item as any).giftDiscountId && item.productId) {
+          try {
+            await this.setGiftSuppression(String(item.cartId), String((item as any).giftDiscountId), String(item.productId), true);
+          } catch {}
+        }
+      } else {
+        await db
+          .update(schema.cartItems)
+          .set({
+            quantity: nextQty,
+            unitPrice: "0.00",
+            totalPrice: "0.00",
+          } as any)
+          .where(eq(schema.cartItems.id, itemId));
+      }
+
+      await this.recalculateTotals(item.cartId);
+      return item.cartId;
+    }
+
     const totalPrice = parseFloat(item.unitPrice) * quantity;
 
     await db
@@ -446,7 +790,12 @@ export class StorefrontCartRepository {
    */
   async removeItem(itemId: string): Promise<string> {
     const [item] = await db
-      .select({ cartId: schema.cartItems.cartId })
+      .select({
+        cartId: schema.cartItems.cartId,
+        productId: schema.cartItems.productId,
+        isGift: schema.cartItems.isGift,
+        giftDiscountId: schema.cartItems.giftDiscountId,
+      })
       .from(schema.cartItems)
       .where(eq(schema.cartItems.id, itemId))
       .limit(1);
@@ -456,6 +805,12 @@ export class StorefrontCartRepository {
     }
 
     await db.delete(schema.cartItems).where(eq(schema.cartItems.id, itemId));
+
+    if (item.isGift && item.giftDiscountId && item.productId) {
+      try {
+        await this.setGiftSuppression(String(item.cartId), String(item.giftDiscountId), String(item.productId), true);
+      } catch {}
+    }
 
     // Recalculate cart totals
     await this.recalculateTotals(item.cartId);
@@ -467,15 +822,51 @@ export class StorefrontCartRepository {
    * Recalculate cart totals
    */
   async recalculateTotals(cartId: string) {
+    try {
+      await this.ensureBxgyBundleGifts(cartId);
+    } catch {
+    }
+
     const items = await db
       .select()
       .from(schema.cartItems)
       .where(eq(schema.cartItems.cartId, cartId));
 
-    const subtotal = items.reduce(
-      (sum, item) => sum + parseFloat(item.totalPrice),
-      0
-    );
+    try {
+      const offers = await storefrontOffersService.listActivePriceOffers();
+      if (offers.length && items.length) {
+        for (const item of items as any[]) {
+          if (Boolean((item as any).isGift)) continue;
+          const baseUnit = parseFloat(String(item.unitPrice));
+          const qty = Number(item.quantity || 0);
+          if (!Number.isFinite(baseUnit) || baseUnit <= 0 || !Number.isFinite(qty) || qty <= 0) continue;
+
+          const picked = storefrontOffersService.pickBestOfferForProduct({
+            offers,
+            productId: String(item.productId),
+            categoryIds: [],
+            baseUnitPrice: baseUnit,
+          });
+          if (!picked) continue;
+
+          const nextUnit = Number(picked.discountedUnitPrice);
+          if (!Number.isFinite(nextUnit) || nextUnit <= 0) continue;
+          if (Number(nextUnit.toFixed(2)) === Number(baseUnit.toFixed(2))) continue;
+
+          const nextTotal = nextUnit * qty;
+          await db
+            .update(schema.cartItems)
+            .set({ unitPrice: nextUnit.toFixed(2), totalPrice: nextTotal.toFixed(2) } as any)
+            .where(eq(schema.cartItems.id, item.id));
+
+          item.unitPrice = nextUnit.toFixed(2);
+          item.totalPrice = nextTotal.toFixed(2);
+        }
+      }
+    } catch {
+    }
+
+    const subtotal = items.reduce((sum, item) => sum + parseFloat(item.totalPrice), 0);
 
     // TODO: Calculate tax based on shipping address
     const taxAmount = 0;
@@ -516,7 +907,9 @@ export class StorefrontCartRepository {
     const discounts = await db
       .select()
       .from(schema.discounts)
-      .where(sql`${schema.discounts.isAutomatic} = true and ${schema.discounts.status} = 'active' and (${schema.discounts.startsAt} is null or ${schema.discounts.startsAt} <= ${now}) and (${schema.discounts.endsAt} is null or ${schema.discounts.endsAt} >= ${now})`);
+      .where(
+        sql`${schema.discounts.isAutomatic} = true and ${schema.discounts.status} = 'active' and (${schema.discounts.startsAt} is null or ${schema.discounts.startsAt} <= ${now}) and (${schema.discounts.endsAt} is null or ${schema.discounts.endsAt} >= ${now}) and coalesce(${schema.discounts.metadata} ->> 'kind', '') <> 'offer'`,
+      );
 
     if (!discounts.length) return { amount: 0 };
 

@@ -41,6 +41,7 @@ export function CartItem({ item }: CartItemProps) {
   const itemTotal = item.totalPrice;
   const hasDiscount = false; // Cart items don't have compareAtPrice
   const discount = 0;
+  const isGift = Boolean((item as any).isGift);
 
   return (
     <>
@@ -70,6 +71,12 @@ export function CartItem({ item }: CartItemProps) {
                 >
                   {item.productName}
                 </Link>
+
+                {isGift ? (
+                  <div className="mt-1 text-xs font-medium text-green-700 dark:text-green-300">
+                    Free gift
+                  </div>
+                ) : null}
                 
                 {/* Variant Info */}
                 {item.variantName && (
@@ -115,12 +122,17 @@ export function CartItem({ item }: CartItemProps) {
 
               {/* Price */}
               <div className="text-right">
-                <div className="font-semibold">
-                  ${itemTotal.toFixed(2)}
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  ${item.unitPrice.toFixed(2)} each
-                </div>
+                {isGift ? (
+                  <>
+                    <div className="font-semibold text-green-700 dark:text-green-300">FREE</div>
+                    <div className="text-xs text-muted-foreground mt-1">$0.00 each</div>
+                  </>
+                ) : (
+                  <>
+                    <div className="font-semibold">${itemTotal.toFixed(2)}</div>
+                    <div className="text-xs text-muted-foreground mt-1">${item.unitPrice.toFixed(2)} each</div>
+                  </>
+                )}
               </div>
             </div>
           </div>

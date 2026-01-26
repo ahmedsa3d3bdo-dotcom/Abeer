@@ -6,6 +6,26 @@ import { auth } from "@/auth";
 import type { ProductCard } from "@/types/storefront";
 
 export class RecommendationsService {
+  private async enrichByIds(ids: string[], limit: number): Promise<ProductCard[]> {
+    const unique = Array.from(new Set((ids || []).map(String).filter(Boolean)));
+    const take = unique.slice(0, Math.max(0, limit));
+    if (!take.length) return [];
+
+    const res = await storefrontProductsService.list({
+      page: 1,
+      limit: Math.min(50, take.length),
+      sortBy: "newest",
+      productIds: take,
+    });
+
+    const order = new Map<string, number>();
+    take.forEach((id, idx) => order.set(String(id), idx));
+
+    return [...(res.items || [])].sort(
+      (a, b) => (order.get(String(a.id)) ?? 0) - (order.get(String(b.id)) ?? 0)
+    );
+  }
+
   private async popularFallback(limit: number): Promise<ProductCard[]> {
     // Try trending first
     const trending = await storefrontProductsService.getTrending(limit);
@@ -34,20 +54,9 @@ export class RecommendationsService {
     if (!items || items.length === 0) {
       return await this.popularFallback(limit);
     }
-    return items.map((item: any) => ({
-      id: item.id,
-      name: item.name,
-      slug: item.slug,
-      price: parseFloat(item.price),
-      compareAtPrice: item.compareAtPrice ? parseFloat(item.compareAtPrice) : undefined,
-      primaryImage: item.primaryImageUrl || "/placeholder-product.svg",
-      images: item.primaryImageUrl ? [item.primaryImageUrl] : [],
-      rating: Number(item.rating ?? 0),
-      reviewCount: Number(item.reviewCount ?? 0),
-      stockStatus: item.stockStatus,
-      isFeatured: !!item.isFeatured,
-      badge: undefined,
-    }));
+
+    const ids = items.map((it: any) => String(it.id)).filter(Boolean);
+    return await this.enrichByIds(ids, limit);
   }
 
   /**
@@ -73,20 +82,9 @@ export class RecommendationsService {
     if (!items || items.length === 0) {
       return await storefrontProductsService.getTrending(limit);
     }
-    return items.map((item: any) => ({
-      id: item.id,
-      name: item.name,
-      slug: item.slug,
-      price: parseFloat(item.price),
-      compareAtPrice: item.compareAtPrice ? parseFloat(item.compareAtPrice) : undefined,
-      primaryImage: item.primaryImageUrl || "/placeholder-product.svg",
-      images: item.primaryImageUrl ? [item.primaryImageUrl] : [],
-      rating: Number(item.rating ?? 0),
-      reviewCount: Number(item.reviewCount ?? 0),
-      stockStatus: item.stockStatus,
-      isFeatured: !!item.isFeatured,
-      badge: undefined,
-    }));
+
+    const ids = items.map((it: any) => String(it.id)).filter(Boolean);
+    return await this.enrichByIds(ids, limit);
   }
 
   /**
@@ -114,20 +112,9 @@ export class RecommendationsService {
     if (!items || items.length === 0) {
       return await this.popularFallback(limit);
     }
-    return items.map((item: any) => ({
-      id: item.id,
-      name: item.name,
-      slug: item.slug,
-      price: parseFloat(item.price),
-      compareAtPrice: item.compareAtPrice ? parseFloat(item.compareAtPrice) : undefined,
-      primaryImage: item.primaryImageUrl || "/placeholder-product.svg",
-      images: item.primaryImageUrl ? [item.primaryImageUrl] : [],
-      rating: Number(item.rating ?? 0),
-      reviewCount: Number(item.reviewCount ?? 0),
-      stockStatus: item.stockStatus,
-      isFeatured: !!item.isFeatured,
-      badge: undefined,
-    }));
+
+    const ids = items.map((it: any) => String(it.id)).filter(Boolean);
+    return await this.enrichByIds(ids, limit);
   }
 }
 

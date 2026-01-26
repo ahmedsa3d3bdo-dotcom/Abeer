@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, RefreshCcw, X, Layers, CheckCircle2, Clock, Archive, Zap, Users, DollarSign, Printer } from "lucide-react";
+import { Plus, RefreshCcw, X, Layers, CheckCircle2, Clock, Archive, Users, DollarSign, Printer } from "lucide-react";
 import { toast } from "sonner";
 
 import { MetricCard } from "@/components/common/metric-card";
@@ -32,6 +32,33 @@ import { getDiscountColumns, type DiscountRow } from "./columns";
 const DEFAULT_LIMIT = 10;
 
 export default function DiscountsPage() {
+  const getKindLabel = (row: any) => {
+    const isAutomatic = Boolean(row?.isAutomatic);
+    if (!isAutomatic) return "Coupon";
+    const md: any = row?.metadata || null;
+    const offerKind = String(md?.offerKind || "");
+    const kind = String(md?.kind || "");
+    if (offerKind === "bundle") return "Bundle offer";
+    if (offerKind === "bxgy_generic") return "BXGY generic";
+    if (offerKind === "bxgy_bundle") return "BXGY bundle";
+    if (kind === "offer" || offerKind === "standard") return "Scheduled offer";
+    if (kind === "deal") return "Deal";
+    return "Automatic";
+  };
+
+  const inferDiscountKind = (row: any) => {
+    const isAutomatic = Boolean(row?.isAutomatic);
+    if (!isAutomatic) return "coupon" as const;
+    const md: any = row?.metadata || null;
+    const offerKind = String(md?.offerKind || "");
+    const kind = String(md?.kind || "");
+    if (offerKind === "bundle") return "bundle_offer" as const;
+    if (offerKind === "bxgy_generic") return "bxgy_generic" as const;
+    if (offerKind === "bxgy_bundle") return "bxgy_bundle" as const;
+    if (kind === "offer" || offerKind === "standard") return "scheduled_offer" as const;
+    return "scheduled_offer" as const;
+  };
+
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<DiscountRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -42,6 +69,7 @@ export default function DiscountsPage() {
 
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<string>("all");
+  const [kind, setKind] = useState<string>("all");
   const [type, setType] = useState<string>("all");
   const [scope, setScope] = useState<string>("all");
   const [activeNow, setActiveNow] = useState<boolean>(false);
@@ -66,8 +94,17 @@ export default function DiscountsPage() {
     isAutomatic: false,
     status: "draft",
   });
-  const [offerKind, setOfferKind] = useState<"standard" | "bundle">("standard");
+  const [discountKind, setDiscountKind] = useState<
+    "coupon" | "scheduled_offer" | "bxgy_generic" | "bxgy_bundle" | "bundle_offer"
+  >("coupon");
   const [bundleRequiredQty, setBundleRequiredQty] = useState<string>("");
+  const [metadata, setMetadata] = useState<any | null>(null);
+  const [offerImageUrl, setOfferImageUrl] = useState<string>("");
+  const [uploadingOfferImage, setUploadingOfferImage] = useState(false);
+  const [bxgyBuyQty, setBxgyBuyQty] = useState<string>("");
+  const [bxgyGetQty, setBxgyGetQty] = useState<string>("");
+  const [bundleBuyLines, setBundleBuyLines] = useState<Array<{ productId: string; quantity: string }>>([]);
+  const [bundleGetLines, setBundleGetLines] = useState<Array<{ productId: string; quantity: string }>>([]);
   const [productIds, setProductIds] = useState<string[]>([]);
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
   const [productsQ, setProductsQ] = useState("");
@@ -80,6 +117,7 @@ export default function DiscountsPage() {
       getDiscountColumns({
         onEdit: async (row) => {
           setEditing(row);
+          setDiscountKind("coupon");
           setForm({
             name: row.name,
             code: row.code || "",
@@ -98,15 +136,55 @@ export default function DiscountsPage() {
             const res = await fetch(`/api/v1/discounts/${row.id}`);
             const data = await res.json();
             if (res.ok && data?.data) {
+              setDiscountKind(inferDiscountKind(data.data));
+
+              setForm((prev) => ({
+                ...prev,
+                name: String(data.data?.name || prev.name),
+                isAutomatic: Boolean(data.data?.isAutomatic),
+                code: String(data.data?.code || ""),
+                type: String(data.data?.type || prev.type),
+                value: data.data?.value != null ? String(data.data.value) : prev.value,
+                scope: String(data.data?.scope || prev.scope),
+                usageLimit: data.data?.usageLimit != null ? String(data.data.usageLimit) : "",
+                startsAt: data.data?.startsAt ? new Date(data.data.startsAt).toISOString().slice(0, 16) : "",
+                endsAt: data.data?.endsAt ? new Date(data.data.endsAt).toISOString().slice(0, 16) : "",
+                minSubtotal: data.data?.minSubtotal != null ? String(data.data.minSubtotal) : prev.minSubtotal,
+                status: String(data.data?.status || prev.status),
+              }));
+
               setProductIds(Array.isArray(data.data.productIds) ? data.data.productIds : []);
               setCategoryIds(Array.isArray(data.data.categoryIds) ? data.data.categoryIds : []);
               const md: any = data.data.metadata || null;
+              setMetadata(md);
+              setOfferImageUrl(String(md?.display?.imageUrl || ""));
               if (md?.offerKind === "bundle") {
-                setOfferKind("bundle");
                 setBundleRequiredQty(md?.bundle?.requiredQty ? String(md.bundle.requiredQty) : "");
               } else {
-                setOfferKind("standard");
                 setBundleRequiredQty("");
+              }
+              if (md?.kind === "deal" && md?.offerKind === "bxgy_generic") {
+                setBxgyBuyQty(md?.bxgy?.buyQty != null ? String(md.bxgy.buyQty) : "");
+                setBxgyGetQty(md?.bxgy?.getQty != null ? String(md.bxgy.getQty) : "");
+              } else {
+                setBxgyBuyQty("");
+                setBxgyGetQty("");
+              }
+              if (md?.kind === "deal" && md?.offerKind === "bxgy_bundle") {
+                const spec = md?.bxgyBundle || {};
+                setBundleBuyLines(
+                  Array.isArray(spec.buy)
+                    ? spec.buy.map((x: any) => ({ productId: String(x?.productId || ""), quantity: String(x?.quantity || "") }))
+                    : [],
+                );
+                setBundleGetLines(
+                  Array.isArray(spec.get)
+                    ? spec.get.map((x: any) => ({ productId: String(x?.productId || ""), quantity: String(x?.quantity || "") }))
+                    : [],
+                );
+              } else {
+                setBundleBuyLines([]);
+                setBundleGetLines([]);
               }
             }
           } catch {}
@@ -143,6 +221,7 @@ export default function DiscountsPage() {
       const params = new URLSearchParams();
       if (q) params.set("q", q);
       if (status !== "all") params.set("status", status);
+      if (kind !== "all") params.set("kind", kind);
       if (type !== "all") params.set("type", type);
       if (scope !== "all") params.set("scope", scope);
       if (activeNow) params.set("activeNow", "true");
@@ -171,6 +250,7 @@ export default function DiscountsPage() {
     const params = new URLSearchParams();
     if (q) params.set("q", q);
     if (status !== "all") params.set("status", status);
+    if (kind !== "all") params.set("kind", kind);
     if (type !== "all") params.set("type", type);
     if (scope !== "all") params.set("scope", scope);
     if (activeNow) params.set("activeNow", "true");
@@ -215,21 +295,23 @@ export default function DiscountsPage() {
           <div className="mt-4 rounded-md border">
             <div className="grid grid-cols-12 gap-2 border-b p-2 text-xs text-muted-foreground">
               <div className="col-span-4">Discount</div>
+              <div className="col-span-2">Kind</div>
               <div className="col-span-2">Type</div>
               <div className="col-span-2">Value</div>
-              <div className="col-span-2">Scope</div>
-              <div className="col-span-2">Status</div>
+              <div className="col-span-1">Scope</div>
+              <div className="col-span-1">Status</div>
             </div>
             {all.map((d) => (
-              <div key={d.id} className="grid grid-cols-12 gap-2 border-b p-2 text-sm">
+              <div key={d.id} className="grid grid-cols-12 gap-2 border-b p-2 text-xs">
                 <div className="col-span-4">
                   <div className="font-medium">{d.name}</div>
                   <div className="text-xs text-muted-foreground">{d.code || "—"}</div>
                 </div>
+                <div className="col-span-2">{getKindLabel(d)}</div>
                 <div className="col-span-2 capitalize">{String(d.type).replaceAll("_", " ")}</div>
                 <div className="col-span-2">{String(d.type) === "percentage" ? `${d.value}%` : `$${d.value}`}</div>
-                <div className="col-span-2 capitalize">{String(d.scope).replaceAll("_", " ")}</div>
-                <div className="col-span-2 capitalize">{String(d.status)}</div>
+                <div className="col-span-1 capitalize">{String(d.scope).replaceAll("_", " ")}</div>
+                <div className="col-span-1 capitalize">{String(d.status)}</div>
               </div>
             ))}
           </div>
@@ -242,11 +324,12 @@ export default function DiscountsPage() {
   }
 
   async function printSelectedDiscounts() {
-    const selectedIds = Object.keys((table as any)?.getState?.().rowSelection || {});
-    if (!selectedIds.length) {
-      toast.error("Select at least one discount to print");
+    const selected = table.getSelectedRowModel().rows.map((r) => r.original);
+    if (!selected.length) {
+      toast.message("No discounts selected");
       return;
     }
+    const selectedIds = selected.map((s) => s.id);
 
     try {
       setPrintPreparing(true);
@@ -275,6 +358,10 @@ export default function DiscountsPage() {
                   <div className="text-sm capitalize">{String(d.status)}</div>
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                  <div className="rounded-md border p-3">
+                    <div className="text-xs text-muted-foreground">Kind</div>
+                    <div className="font-medium">{getKindLabel(d)}</div>
+                  </div>
                   <div className="rounded-md border p-3">
                     <div className="text-xs text-muted-foreground">Type</div>
                     <div className="font-medium capitalize">{String(d.type).replaceAll("_", " ")}</div>
@@ -315,7 +402,7 @@ export default function DiscountsPage() {
     void fetchItems();
     void fetchMetrics();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, status, type, scope, activeNow, pageIndex, pageSize]);
+  }, [q, status, kind, type, scope, activeNow, pageIndex, pageSize]);
 
   useEffect(() => {
     if (open) {
@@ -331,6 +418,7 @@ export default function DiscountsPage() {
       const params = new URLSearchParams();
       if (q) params.set("q", q);
       if (status !== "all") params.set("status", status);
+      if (kind !== "all") params.set("kind", kind);
       if (type !== "all") params.set("type", type);
       if (scope !== "all") params.set("scope", scope);
       if (activeNow) params.set("activeNow", "true");
@@ -364,34 +452,163 @@ export default function DiscountsPage() {
       isAutomatic: false,
       status: "draft",
     });
+    setDiscountKind("coupon");
     setProductIds([]);
     setCategoryIds([]);
-    setOfferKind("standard");
     setBundleRequiredQty("");
+    setMetadata(null);
+    setOfferImageUrl("");
+    setUploadingOfferImage(false);
+    setBxgyBuyQty("");
+    setBxgyGetQty("");
+    setBundleBuyLines([]);
+    setBundleGetLines([]);
+  }
+
+  async function uploadOfferImage(file: File) {
+    try {
+      setUploadingOfferImage(true);
+      const fd = new FormData();
+      fd.append("files", file);
+      const up = await fetch(`/api/v1/uploads`, { method: "POST", body: fd });
+      const upData = await up.json();
+      if (!up.ok) throw new Error(upData?.error?.message || "Upload failed");
+      const url = String(upData?.data?.items?.[0]?.url || "");
+      if (!url) throw new Error("Upload failed");
+      setOfferImageUrl(url);
+      setMetadata((prev: any) => ({ ...(prev || {}), display: { ...((prev || {})?.display || {}), imageUrl: url } }));
+    } catch (e: any) {
+      toast.error(e?.message || "Upload failed");
+    } finally {
+      setUploadingOfferImage(false);
+    }
   }
 
   async function onSubmit() {
     try {
-      const payload: any = {
+      const base: any = {
         name: form.name,
-        code: form.code || null,
-        type: form.type,
-        value: form.value,
-        scope: form.scope,
-        usageLimit: form.usageLimit ? Number(form.usageLimit) : null,
         startsAt: form.startsAt ? new Date(form.startsAt).toISOString() : null,
         endsAt: form.endsAt ? new Date(form.endsAt).toISOString() : null,
-        minSubtotal: form.minSubtotal || null,
-        isAutomatic: !!form.isAutomatic,
         status: form.status,
       };
-      if (form.scope === "products") payload.productIds = productIds;
-      if (form.scope === "categories") payload.categoryIds = categoryIds;
-      if (offerKind === "bundle") {
-        payload.metadata = { offerKind: "bundle", bundle: { requiredQty: bundleRequiredQty ? Number(bundleRequiredQty) : null } };
-      } else {
-        payload.metadata = { offerKind: "standard" };
+
+      let payload: any = null;
+      if (discountKind === "coupon") {
+        payload = {
+          ...base,
+          code: form.code || null,
+          type: form.type,
+          value: form.value,
+          scope: form.scope,
+          usageLimit: form.usageLimit ? Number(form.usageLimit) : null,
+          minSubtotal: form.minSubtotal || null,
+          isAutomatic: false,
+          metadata: metadata || null,
+        };
+        if (form.scope === "products") payload.productIds = productIds;
+        if (form.scope === "categories") payload.categoryIds = categoryIds;
+      } else if (discountKind === "scheduled_offer") {
+        payload = {
+          ...base,
+          code: null,
+          type: form.type,
+          value: form.value,
+          scope: "all",
+          usageLimit: null,
+          minSubtotal: null,
+          isAutomatic: true,
+          productIds,
+          categoryIds,
+          metadata: {
+            ...(metadata || {}),
+            kind: "offer",
+            offerKind: "standard",
+            display: {
+              ...(((metadata || {}) as any)?.display || {}),
+              imageUrl: offerImageUrl || (((metadata || {}) as any)?.display?.imageUrl || ""),
+            },
+          },
+        };
+      } else if (discountKind === "bundle_offer") {
+        payload = {
+          ...base,
+          code: null,
+          type: form.type,
+          value: form.value,
+          scope: "all",
+          usageLimit: null,
+          minSubtotal: null,
+          isAutomatic: true,
+          productIds,
+          categoryIds,
+          metadata: {
+            ...(metadata || {}),
+            kind: "offer",
+            offerKind: "bundle",
+            bundle: { requiredQty: bundleRequiredQty ? Number(bundleRequiredQty) : null },
+            display: {
+              ...(((metadata || {}) as any)?.display || {}),
+              imageUrl: offerImageUrl || (((metadata || {}) as any)?.display?.imageUrl || ""),
+            },
+          },
+        };
+      } else if (discountKind === "bxgy_generic") {
+        payload = {
+          ...base,
+          code: null,
+          type: "fixed_amount",
+          value: "0",
+          scope: "all",
+          usageLimit: null,
+          minSubtotal: null,
+          isAutomatic: true,
+          productIds,
+          categoryIds,
+          metadata: {
+            ...(metadata || {}),
+            kind: "deal",
+            offerKind: "bxgy_generic",
+            bxgy: {
+              buyQty: bxgyBuyQty ? Number(bxgyBuyQty) : null,
+              getQty: bxgyGetQty ? Number(bxgyGetQty) : null,
+            },
+            display: {
+              ...(((metadata || {}) as any)?.display || {}),
+              imageUrl: offerImageUrl || (((metadata || {}) as any)?.display?.imageUrl || ""),
+            },
+          },
+        };
+      } else if (discountKind === "bxgy_bundle") {
+        payload = {
+          ...base,
+          code: null,
+          type: "fixed_amount",
+          value: "0",
+          scope: "all",
+          usageLimit: null,
+          minSubtotal: null,
+          isAutomatic: true,
+          metadata: {
+            ...(metadata || {}),
+            kind: "deal",
+            offerKind: "bxgy_bundle",
+            bxgyBundle: {
+              buy: bundleBuyLines
+                .filter((l) => l.productId && l.quantity)
+                .map((l) => ({ productId: l.productId, quantity: Number(l.quantity) })),
+              get: bundleGetLines
+                .filter((l) => l.productId && l.quantity)
+                .map((l) => ({ productId: l.productId, quantity: Number(l.quantity) })),
+            },
+            display: {
+              ...(((metadata || {}) as any)?.display || {}),
+              imageUrl: offerImageUrl || (((metadata || {}) as any)?.display?.imageUrl || ""),
+            },
+          },
+        };
       }
+      if (!payload) throw new Error("Invalid discount kind");
       const res = await fetch(editing ? `/api/v1/discounts/${editing.id}` : "/api/v1/discounts", {
         method: editing ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -432,13 +649,12 @@ export default function DiscountsPage() {
 
   return (
     <div className="@container/main flex flex-col gap-4 md:gap-6">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <MetricCard title="Total discounts" value={metrics?.totalDiscounts ?? total} icon={Layers} tone="blue" />
         <MetricCard title="Active" value={Number(metrics?.activeCount ?? 0)} icon={CheckCircle2} tone="emerald" />
         <MetricCard title="Draft" value={Number(metrics?.draftCount ?? 0)} icon={Clock} tone="amber" />
         <MetricCard title="Expired" value={Number(metrics?.expiredCount ?? 0)} icon={X} tone="rose" />
         <MetricCard title="Archived" value={Number(metrics?.archivedCount ?? 0)} icon={Archive} tone="slate" />
-        <MetricCard title="Active now" value={Number(metrics?.activeNowCount ?? 0)} icon={Zap} tone="violet" />
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard title="Total usage" value={Number(metrics?.totalUsage ?? 0)} icon={Users} tone="blue" />
@@ -464,6 +680,22 @@ export default function DiscountsPage() {
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="expired">Expired</SelectItem>
                 <SelectItem value="archived">Archived</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label>Kind</Label>
+            <Select value={kind} onValueChange={(v) => setKind(v)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="coupon">Coupon</SelectItem>
+                <SelectItem value="scheduled_offer">Scheduled offer</SelectItem>
+                <SelectItem value="bxgy_generic">BXGY generic</SelectItem>
+                <SelectItem value="bxgy_bundle">BXGY bundle</SelectItem>
+                <SelectItem value="bundle_offer">Bundle offer</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -538,98 +770,430 @@ export default function DiscountsPage() {
               </Button>
             }
           >
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="flex flex-col gap-1.5">
-                  <Label>Name</Label>
-                  <Input value={form.name} onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))} />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>Code</Label>
-                  <Input value={form.code} onChange={(e) => setForm((s) => ({ ...s, code: e.target.value }))} />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>Type</Label>
-                  <Select value={form.type} onValueChange={(v) => setForm((s) => ({ ...s, type: v }))}>
+              <div className="grid grid-cols-1 gap-3">
+                <div className="flex flex-col gap-1.5 sm:col-span-2">
+                  <Label>Discount kind</Label>
+                  <Select
+                    value={discountKind}
+                    onValueChange={(v) => {
+                      const next = v as any;
+                      setDiscountKind(next);
+                      if (next === "coupon") {
+                        setForm((s) => ({ ...s, isAutomatic: false }));
+                      } else {
+                        setForm((s) => ({ ...s, isAutomatic: true, code: "", scope: "all", usageLimit: "", minSubtotal: "" }));
+                      }
+                      if (next !== "bxgy_generic") {
+                        setBxgyBuyQty("");
+                        setBxgyGetQty("");
+                      }
+                      if (next !== "bxgy_bundle") {
+                        setBundleBuyLines([]);
+                        setBundleGetLines([]);
+                      }
+                      if (next !== "bundle_offer") {
+                        setBundleRequiredQty("");
+                      }
+                      if (next === "bxgy_bundle") {
+                        setProductIds([]);
+                        setCategoryIds([]);
+                      }
+                    }}
+                    disabled={!!editing && discountKind === "bundle_offer"}
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="percentage">Percentage</SelectItem>
-                      <SelectItem value="fixed_amount">Fixed amount</SelectItem>
-                      <SelectItem value="free_shipping">Free shipping</SelectItem>
+                      <SelectItem value="coupon">Coupon code</SelectItem>
+                      <SelectItem value="scheduled_offer">Scheduled offer</SelectItem>
+                      <SelectItem value="bxgy_generic">Buy X get Y (generic)</SelectItem>
+                      <SelectItem value="bxgy_bundle">Buy X get Y (bundle)</SelectItem>
+                      {editing && discountKind === "bundle_offer" ? (
+                        <SelectItem value="bundle_offer">Bundle offer (legacy)</SelectItem>
+                      ) : null}
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>Value</Label>
-                  <Input value={form.value} onChange={(e) => setForm((s) => ({ ...s, value: e.target.value }))} />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>Scope</Label>
-                  <Select value={form.scope} onValueChange={(v) => setForm((s) => ({ ...s, scope: v }))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All</SelectItem>
-                      <SelectItem value="products">Products</SelectItem>
-                      <SelectItem value="categories">Categories</SelectItem>
-                      <SelectItem value="collections">Collections</SelectItem>
-                      <SelectItem value="customer_groups">Customer groups</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>Usage limit</Label>
-                  <Input value={form.usageLimit} onChange={(e) => setForm((s) => ({ ...s, usageLimit: e.target.value }))} />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>Starts at</Label>
-                  <Input type="datetime-local" value={form.startsAt} onChange={(e) => setForm((s) => ({ ...s, startsAt: e.target.value }))} />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>Ends at</Label>
-                  <Input type="datetime-local" value={form.endsAt} onChange={(e) => setForm((s) => ({ ...s, endsAt: e.target.value }))} />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>Status</Label>
-                  <Select value={form.status} onValueChange={(v) => setForm((s) => ({ ...s, status: v }))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="draft">Draft</SelectItem>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="expired">Expired</SelectItem>
-                      <SelectItem value="archived">Archived</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-center gap-2 pt-7">
-                  <Checkbox checked={form.isAutomatic} onCheckedChange={(v) => setForm((s) => ({ ...s, isAutomatic: !!v }))} />
-                  <Label>Automatic</Label>
-                </div>
-                <>
-                  <div className="flex flex-col gap-1.5">
-                    <Label>Offer kind</Label>
-                    <Select value={offerKind} onValueChange={(v) => setOfferKind(v as any)} disabled={!form.isAutomatic}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="standard">Standard offer</SelectItem>
-                        <SelectItem value="bundle">Bundle offer</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {offerKind === "bundle" && (
-                    <div className="flex flex-col gap-1.5">
-                      <Label>Bundle required quantity</Label>
-                      <Input type="number" min={1} placeholder="e.g. 3" value={bundleRequiredQty} onChange={(e) => setBundleRequiredQty(e.target.value)} disabled={!form.isAutomatic} />
+                {discountKind === "scheduled_offer" && (
+                  <>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Name</Label>
+                        <Input value={form.name} onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))} />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Type</Label>
+                        <Select value={form.type} onValueChange={(v) => setForm((s) => ({ ...s, type: v }))}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="percentage">Percentage</SelectItem>
+                            <SelectItem value="fixed_amount">Fixed amount</SelectItem>
+                            <SelectItem value="free_shipping">Free shipping</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Value</Label>
+                        <Input value={form.value} onChange={(e) => setForm((s) => ({ ...s, value: e.target.value }))} />
+                      </div>
                     </div>
-                  )}
-                </>
-                {form.scope === "products" && (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Starts at</Label>
+                        <Input type="datetime-local" value={form.startsAt} onChange={(e) => setForm((s) => ({ ...s, startsAt: e.target.value }))} />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Ends at</Label>
+                        <Input type="datetime-local" value={form.endsAt} onChange={(e) => setForm((s) => ({ ...s, endsAt: e.target.value }))} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Status</Label>
+                        <Select value={form.status} onValueChange={(v) => setForm((s) => ({ ...s, status: v }))}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="draft">Draft</SelectItem>
+                            <SelectItem value="active">Active</SelectItem>
+                            <SelectItem value="expired">Expired</SelectItem>
+                            <SelectItem value="archived">Archived</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {discountKind === "coupon" && (
+                  <>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Name</Label>
+                        <Input value={form.name} onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))} />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Code</Label>
+                        <Input value={form.code} onChange={(e) => setForm((s) => ({ ...s, code: e.target.value }))} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Type</Label>
+                        <Select value={form.type} onValueChange={(v) => setForm((s) => ({ ...s, type: v }))}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="percentage">Percentage</SelectItem>
+                            <SelectItem value="fixed_amount">Fixed amount</SelectItem>
+                            <SelectItem value="free_shipping">Free shipping</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Value</Label>
+                        <Input value={form.value} onChange={(e) => setForm((s) => ({ ...s, value: e.target.value }))} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Min subtotal</Label>
+                        <Input value={form.minSubtotal} onChange={(e) => setForm((s) => ({ ...s, minSubtotal: e.target.value }))} />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Usage limit</Label>
+                        <Input value={form.usageLimit} onChange={(e) => setForm((s) => ({ ...s, usageLimit: e.target.value }))} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Starts at</Label>
+                        <Input type="datetime-local" value={form.startsAt} onChange={(e) => setForm((s) => ({ ...s, startsAt: e.target.value }))} />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Ends at</Label>
+                        <Input type="datetime-local" value={form.endsAt} onChange={(e) => setForm((s) => ({ ...s, endsAt: e.target.value }))} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Scope</Label>
+                        <Select value={form.scope} onValueChange={(v) => setForm((s) => ({ ...s, scope: v }))}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All</SelectItem>
+                            <SelectItem value="products">Products</SelectItem>
+                            <SelectItem value="categories">Categories</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Status</Label>
+                        <Select value={form.status} onValueChange={(v) => setForm((s) => ({ ...s, status: v }))}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="draft">Draft</SelectItem>
+                            <SelectItem value="active">Active</SelectItem>
+                            <SelectItem value="expired">Expired</SelectItem>
+                            <SelectItem value="archived">Archived</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {discountKind === "bundle_offer" && (
+                  <>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Name</Label>
+                        <Input value={form.name} onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))} />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Type</Label>
+                        <Select value={form.type} onValueChange={(v) => setForm((s) => ({ ...s, type: v }))}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="percentage">Percentage</SelectItem>
+                            <SelectItem value="fixed_amount">Fixed amount</SelectItem>
+                            <SelectItem value="free_shipping">Free shipping</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Value</Label>
+                        <Input value={form.value} onChange={(e) => setForm((s) => ({ ...s, value: e.target.value }))} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Starts at</Label>
+                        <Input type="datetime-local" value={form.startsAt} onChange={(e) => setForm((s) => ({ ...s, startsAt: e.target.value }))} />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Ends at</Label>
+                        <Input type="datetime-local" value={form.endsAt} onChange={(e) => setForm((s) => ({ ...s, endsAt: e.target.value }))} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Status</Label>
+                        <Select value={form.status} onValueChange={(v) => setForm((s) => ({ ...s, status: v }))}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="draft">Draft</SelectItem>
+                            <SelectItem value="active">Active</SelectItem>
+                            <SelectItem value="expired">Expired</SelectItem>
+                            <SelectItem value="archived">Archived</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </>
+                )}
+                {(discountKind === "scheduled_offer" || discountKind === "bundle_offer" || discountKind === "bxgy_generic" || discountKind === "bxgy_bundle") && (
+                  <div className="sm:col-span-2 grid gap-2">
+                    <Label>Offer image</Label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        className="hidden"
+                        id="offer-image"
+                        onChange={(e) => {
+                          const f = e.currentTarget.files?.[0];
+                          if (f) void uploadOfferImage(f);
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={uploadingOfferImage}
+                        onClick={() => {
+                          const el = document.getElementById("offer-image") as HTMLInputElement | null;
+                          el?.click();
+                        }}
+                      >
+                        {uploadingOfferImage ? "Uploading..." : "Upload"}
+                      </Button>
+                      <Input
+                        value={offerImageUrl}
+                        onChange={(e) => setOfferImageUrl(e.target.value)}
+                        placeholder="Or paste image URL"
+                      />
+                    </div>
+                  </div>
+                )}
+                {discountKind === "bundle_offer" && (
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Bundle required quantity</Label>
+                    <Input type="number" min={1} placeholder="e.g. 3" value={bundleRequiredQty} onChange={(e) => setBundleRequiredQty(e.target.value)} />
+                  </div>
+                )}
+                {discountKind === "bxgy_generic" && (
+                  <>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Name</Label>
+                        <Input value={form.name} onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))} />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Tag label</Label>
+                        <Input
+                          value={String((metadata as any)?.display?.tag || "")}
+                          onChange={(e) =>
+                            setMetadata((prev: any) => ({
+                              ...(prev || {}),
+                              display: { ...((prev || {})?.display || {}), tag: e.target.value },
+                            }))
+                          }
+                        />
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label>Buy quantity (X)</Label>
+                      <Input type="number" min={1} value={bxgyBuyQty} onChange={(e) => setBxgyBuyQty(e.target.value)} />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label>Get quantity (Y)</Label>
+                      <Input type="number" min={1} value={bxgyGetQty} onChange={(e) => setBxgyGetQty(e.target.value)} />
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Starts at</Label>
+                        <Input type="datetime-local" value={form.startsAt} onChange={(e) => setForm((s) => ({ ...s, startsAt: e.target.value }))} />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Ends at</Label>
+                        <Input type="datetime-local" value={form.endsAt} onChange={(e) => setForm((s) => ({ ...s, endsAt: e.target.value }))} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Status</Label>
+                        <Select value={form.status} onValueChange={(v) => setForm((s) => ({ ...s, status: v }))}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="draft">Draft</SelectItem>
+                            <SelectItem value="active">Active</SelectItem>
+                            <SelectItem value="expired">Expired</SelectItem>
+                            <SelectItem value="archived">Archived</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </>
+                )}
+                {discountKind === "bxgy_bundle" && (
+                  <div className="sm:col-span-2 grid gap-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Name</Label>
+                        <Input value={form.name} onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))} />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Tag label</Label>
+                        <Input
+                          value={String((metadata as any)?.display?.tag || "")}
+                          onChange={(e) =>
+                            setMetadata((prev: any) => ({
+                              ...(prev || {}),
+                              display: { ...((prev || {})?.display || {}), tag: e.target.value },
+                            }))
+                          }
+                        />
+                      </div>
+                    </div>
+                    <div className="rounded-md border p-3">
+                      <div className="font-medium text-sm mb-2">Buy items</div>
+                      <div className="grid gap-2">
+                        {bundleBuyLines.map((l, idx) => (
+                          <div key={`buy-${idx}`} className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                            <Select value={l.productId} onValueChange={(v) => setBundleBuyLines((prev) => prev.map((x, i) => i === idx ? { ...x, productId: v } : x))}>
+                              <SelectTrigger className="sm:col-span-2">
+                                <SelectValue placeholder="Select product" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {productOptions.map((p) => (
+                                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Input type="number" min={1} placeholder="Qty" value={l.quantity} onChange={(e) => setBundleBuyLines((prev) => prev.map((x, i) => i === idx ? { ...x, quantity: e.target.value } : x))} />
+                            <Button type="button" variant="outline" size="sm" onClick={() => setBundleBuyLines((prev) => prev.filter((_, i) => i !== idx))}>Remove</Button>
+                          </div>
+                        ))}
+                        <Button type="button" variant="outline" size="sm" onClick={() => setBundleBuyLines((prev) => [...prev, { productId: "", quantity: "" }])}>Add buy item</Button>
+                      </div>
+                    </div>
+                    <div className="rounded-md border p-3">
+                      <div className="font-medium text-sm mb-2">Get items (free)</div>
+                      <div className="grid gap-2">
+                        {bundleGetLines.map((l, idx) => (
+                          <div key={`get-${idx}`} className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                            <Select value={l.productId} onValueChange={(v) => setBundleGetLines((prev) => prev.map((x, i) => i === idx ? { ...x, productId: v } : x))}>
+                              <SelectTrigger className="sm:col-span-2">
+                                <SelectValue placeholder="Select product" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {productOptions.map((p) => (
+                                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Input type="number" min={1} placeholder="Qty" value={l.quantity} onChange={(e) => setBundleGetLines((prev) => prev.map((x, i) => i === idx ? { ...x, quantity: e.target.value } : x))} />
+                            <Button type="button" variant="outline" size="sm" onClick={() => setBundleGetLines((prev) => prev.filter((_, i) => i !== idx))}>Remove</Button>
+                          </div>
+                        ))}
+                        <Button type="button" variant="outline" size="sm" onClick={() => setBundleGetLines((prev) => [...prev, { productId: "", quantity: "" }])}>Add get item</Button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Starts at</Label>
+                        <Input type="datetime-local" value={form.startsAt} onChange={(e) => setForm((s) => ({ ...s, startsAt: e.target.value }))} />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Ends at</Label>
+                        <Input type="datetime-local" value={form.endsAt} onChange={(e) => setForm((s) => ({ ...s, endsAt: e.target.value }))} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Status</Label>
+                        <Select value={form.status} onValueChange={(v) => setForm((s) => ({ ...s, status: v }))}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="draft">Draft</SelectItem>
+                            <SelectItem value="active">Active</SelectItem>
+                            <SelectItem value="expired">Expired</SelectItem>
+                            <SelectItem value="archived">Archived</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {(discountKind === "coupon" && form.scope === "products") || discountKind === "scheduled_offer" || discountKind === "bundle_offer" || discountKind === "bxgy_generic" ? (
                   <div className="sm:col-span-2 grid gap-2">
                     <Label>Target products</Label>
                     <Input placeholder="Search products" value={productsQ} onChange={(e) => { setProductsQ(e.target.value); void fetchProducts(e.target.value); }} />
@@ -669,8 +1233,8 @@ export default function DiscountsPage() {
                       </div>
                     )}
                   </div>
-                )}
-                {form.scope === "categories" && (
+                ) : null}
+                {(discountKind === "coupon" && form.scope === "categories") || discountKind === "scheduled_offer" || discountKind === "bundle_offer" || discountKind === "bxgy_generic" ? (
                   <div className="sm:col-span-2 grid gap-2">
                     <Label>Target categories</Label>
                     <Input placeholder="Search categories" value={categoriesQ} onChange={(e) => { setCategoriesQ(e.target.value); void fetchCategories(e.target.value); }} />
@@ -710,7 +1274,7 @@ export default function DiscountsPage() {
                       </div>
                     )}
                   </div>
-                )}
+                ) : null}
               </div>
           </FormModal>
         </div>

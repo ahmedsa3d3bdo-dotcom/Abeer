@@ -36,7 +36,12 @@
     "db:test-app": "tsx test-app-db.ts",
     "db:create": "tsx src/shared/db/scripts/create-db.ts",
     "db:drop": "tsx src/shared/db/scripts/drop-db.ts",
-    "db:setup": "npm run db:create && npm run db:push && npm run db:seed"
+    "db:setup": "npm run db:create && npm run db:push && npm run db:seed",
+    "discount:validate:coupon": "tsx src/scripts/discount-validate-coupon.ts",
+    "discount:validate:scheduled-offer": "tsx src/scripts/discount-validate-scheduled-offer.ts",
+    "discount:validate:bxgy-generic": "tsx src/scripts/discount-validate-bxgy-generic.ts",
+    "discount:validate:bxgy-bundle": "tsx src/scripts/discount-validate-bxgy-bundle.ts",
+    "discount:validate:all": "npm run discount:validate:coupon && npm run discount:validate:scheduled-offer && npm run discount:validate:bxgy-generic && npm run discount:validate:bxgy-bundle"
   },
   "lint-staged": {
     "*.{js,ts,jsx,tsx}": [

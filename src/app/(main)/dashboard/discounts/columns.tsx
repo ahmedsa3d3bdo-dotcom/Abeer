@@ -17,12 +17,33 @@ export type DiscountRow = {
   scope: string;
   status: string;
   isAutomatic: boolean;
+  metadata?: any;
   usageLimit?: number | null;
   usageCount: number;
   startsAt?: string | Date | null;
   endsAt?: string | Date | null;
   createdAt: string | Date;
 };
+
+function getDiscountKindLabel(row: DiscountRow) {
+  if (!row.isAutomatic) return "Coupon";
+  const md: any = row?.metadata || null;
+  if (md?.kind === "offer" && md?.offerKind === "bundle") return "Bundle offer";
+  if (md?.kind === "offer") return "Scheduled offer";
+  if (md?.kind === "deal" && md?.offerKind === "bxgy_generic") return "BXGY generic";
+  if (md?.kind === "deal" && md?.offerKind === "bxgy_bundle") return "BXGY bundle";
+  return "Automatic";
+}
+
+function getDiscountKindValue(row: DiscountRow) {
+  if (!row.isAutomatic) return "coupon";
+  const md: any = row?.metadata || null;
+  if (md?.kind === "offer" && md?.offerKind === "bundle") return "bundle_offer";
+  if (md?.kind === "offer") return "scheduled_offer";
+  if (md?.kind === "deal" && md?.offerKind === "bxgy_generic") return "bxgy_generic";
+  if (md?.kind === "deal" && md?.offerKind === "bxgy_bundle") return "bxgy_bundle";
+  return "scheduled_offer";
+}
 
 export function getDiscountColumns(actions: { onEdit: (row: DiscountRow) => void; onDelete: (row: DiscountRow) => void }): ColumnDef<DiscountRow>[] {
   return [
@@ -57,6 +78,11 @@ export function getDiscountColumns(actions: { onEdit: (row: DiscountRow) => void
           <span className="text-muted-foreground text-xs">{row.original.code || "—"}</span>
         </div>
       ),
+    },
+    {
+      id: "kind",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Kind" />,
+      cell: ({ row }) => <UniversalBadge kind="discount_kind" value={getDiscountKindValue(row.original)} label={getDiscountKindLabel(row.original)} />,
     },
     {
       accessorKey: "type",

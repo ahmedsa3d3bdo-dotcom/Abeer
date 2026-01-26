@@ -96,6 +96,9 @@ export function OrderReview({
         <h3 className="font-semibold mb-4">Order Items ({cart.itemCount})</h3>
         <div className="space-y-4">
           {cart.items.map((item) => (
+            (() => {
+              const isGift = Boolean((item as any).isGift) || (Number(item.unitPrice ?? 0) === 0 && Number(item.totalPrice ?? 0) === 0);
+              return (
             <div key={item.id} className="flex gap-4">
               <div className="relative h-16 w-16 rounded bg-muted flex-shrink-0">
                 <Image
@@ -108,13 +111,20 @@ export function OrderReview({
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm truncate">{item.productName}</p>
+                {isGift ? (
+                  <p className="text-xs font-medium text-green-700 dark:text-green-300">Free gift</p>
+                ) : null}
                 {item.variantName && (
                   <p className="text-xs text-muted-foreground">{item.variantName}</p>
                 )}
                 <p className="text-xs text-muted-foreground">Qty: {item.quantity}</p>
               </div>
-              <p className="font-semibold text-sm">${item.totalPrice.toFixed(2)}</p>
+              <p className={isGift ? "font-semibold text-sm text-green-700 dark:text-green-300" : "font-semibold text-sm"}>
+                {isGift ? "FREE" : `$${item.totalPrice.toFixed(2)}`}
+              </p>
             </div>
+              );
+            })()
           ))}
         </div>
 

@@ -9,6 +9,7 @@ export interface ListDiscountParams {
   status?: (typeof schema.discountStatusEnum.enumValues)[number];
   type?: (typeof schema.discountTypeEnum.enumValues)[number];
   scope?: (typeof schema.discountScopeEnum.enumValues)[number];
+  kind?: "coupon" | "scheduled_offer" | "bxgy_generic" | "bxgy_bundle" | "bundle_offer";
   isAutomatic?: boolean;
   dateFrom?: string;
   dateTo?: string;
@@ -30,6 +31,27 @@ export class DiscountsRepository {
     if (params.status) filters.push(eq(schema.discounts.status, params.status));
     if (params.type) filters.push(eq(schema.discounts.type, params.type));
     if (params.scope) filters.push(eq(schema.discounts.scope, params.scope));
+    if (params.kind) {
+      if (params.kind === "coupon") {
+        filters.push(eq(schema.discounts.isAutomatic, false));
+      } else if (params.kind === "scheduled_offer") {
+        filters.push(eq(schema.discounts.isAutomatic, true));
+        filters.push(sql`coalesce(${schema.discounts.metadata} ->> 'kind', '') = 'offer'`);
+        filters.push(sql`coalesce(${schema.discounts.metadata} ->> 'offerKind', '') <> 'bundle'`);
+      } else if (params.kind === "bundle_offer") {
+        filters.push(eq(schema.discounts.isAutomatic, true));
+        filters.push(sql`coalesce(${schema.discounts.metadata} ->> 'kind', '') = 'offer'`);
+        filters.push(sql`coalesce(${schema.discounts.metadata} ->> 'offerKind', '') = 'bundle'`);
+      } else if (params.kind === "bxgy_generic") {
+        filters.push(eq(schema.discounts.isAutomatic, true));
+        filters.push(sql`coalesce(${schema.discounts.metadata} ->> 'kind', '') = 'deal'`);
+        filters.push(sql`coalesce(${schema.discounts.metadata} ->> 'offerKind', '') = 'bxgy_generic'`);
+      } else if (params.kind === "bxgy_bundle") {
+        filters.push(eq(schema.discounts.isAutomatic, true));
+        filters.push(sql`coalesce(${schema.discounts.metadata} ->> 'kind', '') = 'deal'`);
+        filters.push(sql`coalesce(${schema.discounts.metadata} ->> 'offerKind', '') = 'bxgy_bundle'`);
+      }
+    }
     if (typeof params.isAutomatic === "boolean") filters.push(eq(schema.discounts.isAutomatic, params.isAutomatic));
     if (params.dateFrom) filters.push(sql`${schema.discounts.createdAt} >= ${new Date(params.dateFrom)}`);
     if (params.dateTo) filters.push(sql`${schema.discounts.createdAt} <= ${new Date(params.dateTo)}`);
@@ -60,6 +82,7 @@ export class DiscountsRepository {
         scope: schema.discounts.scope,
         status: schema.discounts.status,
         isAutomatic: schema.discounts.isAutomatic,
+        metadata: schema.discounts.metadata,
         usageLimit: schema.discounts.usageLimit,
         usageCount: schema.discounts.usageCount,
         startsAt: schema.discounts.startsAt,

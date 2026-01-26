@@ -221,6 +221,106 @@ async function seed() {
     }
     console.log(`✅ Created ${productsList.length} products\n`);
 
+    const [p0, p1, p2] = productsList;
+    if (p0?.id && p1?.id && p2?.id) {
+      await db
+        .insert(schema.discounts)
+        .values({
+          name: "Seed Coupon 10%",
+          code: "SEED10",
+          type: "percentage" as any,
+          value: "10.00",
+          scope: "all" as any,
+          status: "active" as any,
+          isAutomatic: false,
+          usageLimit: 500,
+          metadata: { kind: "discount" } as any,
+        })
+        .onConflictDoNothing({ target: schema.discounts.code });
+
+      await db
+        .insert(schema.discounts)
+        .values({
+          name: "Seed Scheduled Offer 25%",
+          code: null,
+          type: "percentage" as any,
+          value: "25.00",
+          scope: "all" as any,
+          status: "active" as any,
+          isAutomatic: true,
+          metadata: { kind: "offer", offerKind: "standard", display: { imageUrl: "" } } as any,
+          startsAt: new Date(Date.now() - 86400000),
+          endsAt: new Date(Date.now() + 86400000 * 30),
+        } as any)
+        .returning({ id: schema.discounts.id })
+        .then(async (rows) => {
+          const offerId = rows[0]?.id;
+          if (offerId) {
+            await db.insert(schema.discountProducts).values({ discountId: offerId, productId: p2.id });
+          }
+        });
+
+      await db
+        .insert(schema.discounts)
+        .values({
+          name: "Seed BXGY Generic (2+1)",
+          code: null,
+          type: "fixed_amount" as any,
+          value: "0.00",
+          scope: "all" as any,
+          status: "active" as any,
+          isAutomatic: true,
+          metadata: {
+            kind: "deal",
+            offerKind: "bxgy_generic",
+            bxgy: { buyQty: 2, getQty: 1 },
+            display: { imageUrl: "" },
+          } as any,
+          startsAt: new Date(Date.now() - 86400000),
+          endsAt: new Date(Date.now() + 86400000 * 30),
+        } as any)
+        .returning({ id: schema.discounts.id })
+        .then(async (rows) => {
+          const dealId = rows[0]?.id;
+          if (dealId) {
+            await db.insert(schema.discountProducts).values({ discountId: dealId, productId: p0.id });
+          }
+        });
+
+      await db
+        .insert(schema.discounts)
+        .values({
+          name: "Seed BXGY Bundle (buy 1 get 1)",
+          code: null,
+          type: "fixed_amount" as any,
+          value: "0.00",
+          scope: "all" as any,
+          status: "active" as any,
+          isAutomatic: true,
+          metadata: {
+            kind: "deal",
+            offerKind: "bxgy_bundle",
+            bxgyBundle: {
+              buy: [{ productId: p0.id, quantity: 1 }],
+              get: [{ productId: p1.id, quantity: 1 }],
+            },
+            display: { imageUrl: "" },
+          } as any,
+          startsAt: new Date(Date.now() - 86400000),
+          endsAt: new Date(Date.now() + 86400000 * 30),
+        } as any)
+        .returning({ id: schema.discounts.id })
+        .then(async (rows) => {
+          const bundleId = rows[0]?.id;
+          if (bundleId) {
+            await db.insert(schema.discountProducts).values([
+              { discountId: bundleId, productId: p0.id },
+              { discountId: bundleId, productId: p1.id },
+            ]);
+          }
+        });
+    }
+
     // 7. Create Orders (realistic 2025 data: Jan-Nov)
     console.log("📝 Creating orders...");
     const orderStatuses = [

@@ -42,6 +42,7 @@ export default function ShopPage() {
     maxPrice: undefined as number | undefined,
     minRating: undefined as number | undefined,
     categoryIds: undefined as string[] | undefined,
+    offerId: undefined as string | undefined,
     inStock: false,
     onSale: false,
     isFeatured: false,
@@ -58,6 +59,7 @@ export default function ShopPage() {
     const inStock = sp.get("inStock") === "true";
     const onSale = sp.get("onSale") === "true";
     const isFeatured = sp.get("isFeatured") === "true";
+    const offerId = sp.get("offerId") || undefined;
     const q = sp.get("q") || sp.get("search") || undefined;
     return {
       page: Number.isNaN(page) ? 1 : page,
@@ -69,9 +71,23 @@ export default function ShopPage() {
       inStock,
       onSale,
       isFeatured,
+      offerId,
       search: q || undefined,
     };
   };
+
+  const offersDataQuery = useQuery<{ items: Array<{ id: string; name: string }> }>({
+    queryKey: ["offers"],
+    queryFn: () => api.get("/api/storefront/offers"),
+  });
+
+  const offerMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const o of (offersDataQuery.data?.items || [])) {
+      map.set(String(o.id), String(o.name));
+    }
+    return map;
+  }, [offersDataQuery.data]);
 
   const categoriesDataQuery = useQuery<{ categories: Array<{ id: string; name: string; slug: string; children?: any[] }> }>({
     queryKey: ["categories"],
@@ -139,6 +155,7 @@ export default function ShopPage() {
     if (filters.onSale) params.set("onSale", "true");
     if (filters.isFeatured) params.set("isFeatured", "true");
     if (filters.search) params.set("q", filters.search);
+    if (filters.offerId) params.set("offerId", String(filters.offerId));
     if (filters.categoryIds && filters.categoryIds.length) {
       const slugs = filters.categoryIds
         .map((id) => categoryIndex.idToSlug.get(id) || "")
@@ -177,6 +194,7 @@ export default function ShopPage() {
     maxPrice: undefined as number | undefined,
     minRating: undefined as number | undefined,
     categoryIds: undefined as string[] | undefined,
+    offerId: undefined as string | undefined,
     inStock: false,
     onSale: false,
     isFeatured: false,
@@ -202,6 +220,7 @@ export default function ShopPage() {
       if (filters.onSale) params.set("onSale", "true");
       if (filters.isFeatured) params.set("isFeatured", "true");
       if (filters.search) params.set("q", filters.search);
+      if (filters.offerId) params.set("offerId", String(filters.offerId));
 
       return api.get(`/api/storefront/products?${params.toString()}`);
     },
@@ -224,6 +243,7 @@ export default function ShopPage() {
       maxPrice: undefined,
       minRating: undefined,
       categoryIds: undefined,
+      offerId: undefined,
       inStock: false,
       onSale: false,
       isFeatured: false,
@@ -236,6 +256,7 @@ export default function ShopPage() {
     filters.maxPrice ||
     filters.minRating ||
     (filters.categoryIds && filters.categoryIds.length > 0) ||
+    !!filters.offerId ||
     filters.inStock ||
     filters.onSale ||
     filters.isFeatured ||
@@ -319,9 +340,13 @@ export default function ShopPage() {
     if (filters.minRating) chips.push({ label: `${filters.minRating}+ stars`, onClear: () => handleFilterChange({ minRating: undefined }) });
     if (filters.inStock) chips.push({ label: "In stock", onClear: () => handleFilterChange({ inStock: false }) });
     if (filters.onSale) chips.push({ label: "On sale", onClear: () => handleFilterChange({ onSale: false }) });
+    if (filters.offerId) {
+      const label = offerMap.get(String(filters.offerId)) || "Offer";
+      chips.push({ label, onClear: () => handleFilterChange({ offerId: undefined }) });
+    }
     if (filters.search) chips.push({ label: `Search: ${filters.search}`, onClear: () => handleFilterChange({ search: undefined }) });
     return chips;
-  }, [filters, catMap]);
+  }, [filters, catMap, offerMap]);
 
   const [density, setDensity] = useState<"comfortable" | "compact">("comfortable");
 
@@ -440,6 +465,7 @@ export default function ShopPage() {
                   maxPrice: undefined,
                   minRating: undefined,
                   categoryIds: undefined,
+                  offerId: undefined,
                   inStock: false,
                   onSale: false,
                   isFeatured: false,
@@ -456,6 +482,7 @@ export default function ShopPage() {
                   maxPrice: pendingFilters.maxPrice,
                   minRating: pendingFilters.minRating,
                   categoryIds: pendingFilters.categoryIds,
+                  offerId: pendingFilters.offerId,
                   inStock: pendingFilters.inStock,
                   onSale: pendingFilters.onSale,
                   isFeatured: pendingFilters.isFeatured,

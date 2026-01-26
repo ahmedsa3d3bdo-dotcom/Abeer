@@ -11,13 +11,21 @@ import { RecommendationsRail } from "@/components/storefront/organisms/recommend
 import { SeasonalOffersBanner } from "@/components/storefront/homepage/seasonal-offers-banner";
 import { AnimatedSection } from "@/components/storefront/homepage/scroll-animations";
 import { storefrontCategoriesService } from "@/server/storefront/services/categories.service";
+import { storefrontOffersService } from "@/server/storefront/services/offers.service";
 import { settingsRepository } from "@/server/repositories/settings.repository";
 import { siteConfig } from "@/config/site";
-import { db } from "@/shared/db";
-import * as schema from "@/shared/db/schema";
-import { sql } from "drizzle-orm";
 
 export const revalidate = 60; // ISR: Revalidate every 60 seconds
+
+type SeasonalOffer = {
+  id: string;
+  name: string;
+  type: "percentage" | "fixed_amount" | "free_shipping";
+  value: string;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  metadata?: any;
+};
 
 async function getCategoriesTree() {
   try {
@@ -28,26 +36,17 @@ async function getCategoriesTree() {
   }
 }
 
-async function getSeasonalOffers() {
-  const now = new Date();
-  const rows = await db
-    .select({
-      id: schema.discounts.id,
-      name: schema.discounts.name,
-      type: schema.discounts.type,
-      value: schema.discounts.value,
-      scope: schema.discounts.scope,
-      startsAt: schema.discounts.startsAt,
-      endsAt: schema.discounts.endsAt,
-      metadata: schema.discounts.metadata,
-    })
-    .from(schema.discounts)
-    .where(
-      sql`${schema.discounts.isAutomatic} = true and ${schema.discounts.status} = 'active' and (${schema.discounts.startsAt} is null or ${schema.discounts.startsAt} <= ${now}) and (${schema.discounts.endsAt} is null or ${schema.discounts.endsAt} >= ${now})`
-    )
-    .orderBy(schema.discounts.startsAt as any);
-
-  return rows.filter((o: any) => o.startsAt || o.endsAt).slice(0, 4);
+async function getSeasonalOffers(): Promise<SeasonalOffer[]> {
+  const rows = await storefrontOffersService.listActiveDisplayPromotions();
+  return rows.slice(0, 4).map((r) => ({
+    id: r.id,
+    name: r.name,
+    type: r.type,
+    value: r.value,
+    startsAt: r.startsAt ? new Date(r.startsAt as any).toISOString() : null,
+    endsAt: r.endsAt ? new Date(r.endsAt as any).toISOString() : null,
+    metadata: r.metadata,
+  }));
 }
 
 export default async function HomePage() {
@@ -62,15 +61,14 @@ export default async function HomePage() {
       <HeroSection />
 
       {/* Category Carousel - Right after hero for immediate discovery */}
+      <AnimatedSection animation="fade-up" delay={100} defer>
+        <SeasonalOffersBanner offers={seasonalOffers} />
+      </AnimatedSection>
+
       <CategoryCarousel categories={topLevelCategories} />
 
       {/* Subcategory Carousel - deeper browsing right after top categories */}
       <SubcategoryCarousel categories={categoriesTree} />
-
-      {/* Seasonal Offers Banner */}
-      <AnimatedSection animation="fade-up" delay={100} defer>
-        <SeasonalOffersBanner offers={seasonalOffers} />
-      </AnimatedSection>
 
       {/* Featured Products */}
       <AnimatedSection animation="fade-up" delay={0} defer>

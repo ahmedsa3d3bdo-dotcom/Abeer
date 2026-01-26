@@ -1,5 +1,6 @@
 import { storefrontProductsRepository } from "../repositories/products.repository";
 import type { ProductCard, Product, PaginatedResponse } from "@/types/storefront";
+import { storefrontOffersService } from "./offers.service";
 
 /**
  * Storefront Products Service
@@ -10,6 +11,7 @@ interface ProductListParams {
   page?: number;
   limit?: number;
   categoryIds?: string[];
+  productIds?: string[];
   minPrice?: number;
   maxPrice?: number;
   minRating?: number;
@@ -20,6 +22,75 @@ interface ProductListParams {
 }
 
 export class StorefrontProductsService {
+  private async applySaleFlagsToProductCards(cards: ProductCard[]) {
+    if (!cards.length) return cards;
+
+    let promoSet = new Set<string>();
+    try {
+      const promos = await storefrontOffersService.listActiveDisplayPromotions();
+      const ids = promos.flatMap((p) => (Array.isArray(p.productIds) ? p.productIds : []));
+      promoSet = new Set(ids.map(String).filter(Boolean));
+    } catch {
+      promoSet = new Set<string>();
+    }
+
+    return cards.map((c) => {
+      const compareSale = !!c.compareAtPrice && Number(c.compareAtPrice) > Number(c.price);
+      const promoSale = promoSet.has(String(c.id));
+      const isOnSale = compareSale || promoSale;
+      const isLowStock = String(c.stockStatus) === "low_stock";
+
+      return {
+        ...c,
+        isOnSale,
+        badge: isOnSale ? "sale" : isLowStock ? "low-stock" : c.badge,
+      };
+    });
+  }
+
+  private async applyOffersToProductCards(cards: ProductCard[]) {
+    if (!cards.length) return cards;
+    const offers = await storefrontOffersService.listActivePriceOffers();
+    if (!offers.length) return cards;
+
+    return cards.map((c) => {
+      const base = Number(c.price || 0);
+      const picked = storefrontOffersService.pickBestOfferForProduct({
+        offers,
+        productId: c.id,
+        categoryIds: [],
+        baseUnitPrice: base,
+      });
+      if (!picked) return c;
+      return {
+        ...c,
+        compareAtPrice: base,
+        price: picked.discountedUnitPrice,
+      };
+    });
+  }
+
+  private async applyOffersToProductDetail(product: Product): Promise<Product> {
+    const offers = await storefrontOffersService.listActivePriceOffers();
+    if (!offers.length) return product;
+
+    const base = Number(product.price || 0);
+    const categoryIds = (product.categories || []).map((c) => c.id);
+    const picked = storefrontOffersService.pickBestOfferForProduct({
+      offers,
+      productId: product.id,
+      categoryIds,
+      baseUnitPrice: base,
+    });
+    if (!picked) return product;
+
+    return {
+      ...product,
+      compareAtPrice: base,
+      price: picked.discountedUnitPrice,
+    };
+  }
+
   /**
    * List products with filters and pagination
    */
@@ -27,7 +98,7 @@ export class StorefrontProductsService {
     const result = await storefrontProductsRepository.list(params);
 
     // Transform to ProductCard format
-    const items: ProductCard[] = result.items.map((item) => ({
+    let items: ProductCard[] = result.items.map((item) => ({
       id: item.id,
       name: item.name,
       slug: item.slug,
@@ -43,6 +114,9 @@ export class StorefrontProductsService {
       isFeatured: item.isFeatured,
       badge: this.determineBadge(item),
     }));
+
+    items = await this.applyOffersToProductCards(items);
+    items = await this.applySaleFlagsToProductCards(items);
 
     return {
       items,
@@ -67,7 +141,7 @@ export class StorefrontProductsService {
     void storefrontProductsRepository.incrementViewCount(product.id);
 
     // Transform to Product format
-    return {
+    const mapped: Product = {
       id: product.id,
       name: product.name,
       slug: product.slug,
@@ -110,6 +184,8 @@ export class StorefrontProductsService {
       metaTitle: product.metaTitle || undefined,
       metaDescription: product.metaDescription || undefined,
     };
+
+    return await this.applyOffersToProductDetail(mapped);
   }
 
   /**
@@ -118,7 +194,7 @@ export class StorefrontProductsService {
   async getFeatured(limit = 8): Promise<ProductCard[]> {
     const items = await storefrontProductsRepository.getFeatured(limit);
 
-    return items.map((item) => ({
+    const mapped = items.map((item) => ({
       id: item.id,
       name: item.name,
       slug: item.slug,
@@ -134,6 +210,9 @@ export class StorefrontProductsService {
       isFeatured: item.isFeatured,
       badge: this.determineBadge(item),
     }));
+
+    const withOffers = await this.applyOffersToProductCards(mapped);
+    return await this.applySaleFlagsToProductCards(withOffers);
   }
 
   /**
@@ -142,7 +221,7 @@ export class StorefrontProductsService {
   async getTrending(limit = 8): Promise<ProductCard[]> {
     const items = await storefrontProductsRepository.getTrending(limit);
 
-    return items.map((item) => ({
+    const mapped = items.map((item) => ({
       id: item.id,
       name: item.name,
       slug: item.slug,
@@ -158,6 +237,9 @@ export class StorefrontProductsService {
       isFeatured: item.isFeatured,
       badge: this.determineBadge(item),
     }));
+
+    const withOffers = await this.applyOffersToProductCards(mapped);
+    return await this.applySaleFlagsToProductCards(withOffers);
   }
 
   /**
@@ -166,7 +248,7 @@ export class StorefrontProductsService {
   async getRelated(productId: string, limit = 4): Promise<ProductCard[]> {
     const items = await storefrontProductsRepository.getRelated(productId, limit);
 
-    return items.map((item) => ({
+    const mapped = items.map((item) => ({
       id: item.id,
       name: item.name,
       slug: item.slug,
@@ -182,6 +264,9 @@ export class StorefrontProductsService {
       isFeatured: item.isFeatured,
       badge: this.determineBadge(item),
     }));
+
+    const withOffers = await this.applyOffersToProductCards(mapped);
+    return await this.applySaleFlagsToProductCards(withOffers);
   }
 
   /**

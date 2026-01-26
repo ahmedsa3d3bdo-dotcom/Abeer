@@ -36,6 +36,7 @@ export interface ProductCard {
   slug: string;
   price: number;
   compareAtPrice?: number;
+  isOnSale?: boolean;
   primaryImage: string;
   images: string[];
   rating: number;
@@ -100,6 +101,8 @@ export interface CartItem {
   quantity: number;
   unitPrice: number;
   totalPrice: number;
+  isGift?: boolean;
+  giftDiscountId?: string;
   image: string;
   maxQuantity: number; // Based on stock
 }

@@ -94,8 +94,12 @@ export class OrdersRepository {
         totalPrice: schema.orderItems.totalPrice,
         taxAmount: schema.orderItems.taxAmount,
         discountAmount: schema.orderItems.discountAmount,
+        productPrice: schema.products.price,
+        variantPrice: schema.productVariants.price,
       })
       .from(schema.orderItems)
+      .leftJoin(schema.products, eq(schema.products.id, schema.orderItems.productId))
+      .leftJoin(schema.productVariants, eq(schema.productVariants.id, schema.orderItems.variantId))
       .where(eq(schema.orderItems.orderId, id));
 
     const shipments = await db
@@ -125,7 +129,22 @@ export class OrdersRepository {
       .where(eq(schema.orderShippingAddresses.orderId, id))
       .limit(1);
 
-    return { order, items, shipments, shippingAddress };
+    const orderDiscounts = await db
+      .select({
+        id: schema.orderDiscounts.id,
+        orderId: schema.orderDiscounts.orderId,
+        discountId: schema.orderDiscounts.discountId,
+        code: schema.orderDiscounts.code,
+        amount: schema.orderDiscounts.amount,
+        discountName: schema.discounts.name,
+        discountType: schema.discounts.type,
+        discountValue: schema.discounts.value,
+      })
+      .from(schema.orderDiscounts)
+      .leftJoin(schema.discounts, eq(schema.discounts.id, schema.orderDiscounts.discountId))
+      .where(eq(schema.orderDiscounts.orderId, id));
+
+    return { order, items, shipments, shippingAddress, orderDiscounts };
   }
 
   async update(id: string, patch: Partial<{ status: any; paymentStatus: any; adminNote: string | null }>) {

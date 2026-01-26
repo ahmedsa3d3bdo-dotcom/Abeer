@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { storefrontProductsService } from "../services/products.service";
+import { storefrontOffersService } from "../services/offers.service";
+import { storefrontProductsRepository } from "../repositories/products.repository";
 
 /**
  * Storefront Products Controller
@@ -15,6 +17,55 @@ export class StorefrontProductsController {
     try {
       const { searchParams } = new URL(request.url);
 
+      // Optional explicit product ID filter (used by recently-viewed, etc.)
+      const productIdRepeated = searchParams.getAll("productId").filter(Boolean);
+      const productIdCsv = (searchParams.get("productIds") || "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const requestedProductIds = Array.from(new Set([...productIdRepeated, ...productIdCsv]));
+
+      const onSaleRequested = searchParams.get("onSale") === "true";
+
+      let saleProductIds: string[] | undefined;
+      if (onSaleRequested) {
+        try {
+          const [promos, compareAtSaleIds] = await Promise.all([
+            storefrontOffersService.listActiveDisplayPromotions(),
+            storefrontProductsRepository.listCompareAtSaleProductIds(),
+          ]);
+          const promoIds = promos.flatMap((p) => (Array.isArray(p.productIds) ? p.productIds : []));
+          const set = new Set<string>([...compareAtSaleIds, ...promoIds].map(String).filter(Boolean));
+          saleProductIds = Array.from(set);
+        } catch {}
+      }
+
+      const offerId = searchParams.get("offerId") || undefined;
+      let offerProductIds: string[] | undefined;
+      if (offerId) {
+        try {
+          const offers = await storefrontOffersService.listActiveDisplayPromotions();
+          const offer = offers.find((o) => String(o.id) === String(offerId));
+          if (offer?.productIds?.length) offerProductIds = offer.productIds;
+        } catch {}
+      }
+
+      const intersect = (a: string[], b: string[]) => {
+        const set = new Set(b.map(String));
+        return a.filter((x) => set.has(String(x)));
+      };
+
+      let productIds: string[] | undefined = requestedProductIds.length ? requestedProductIds : undefined;
+      if (offerProductIds?.length) {
+        productIds = productIds ? intersect(productIds, offerProductIds) : offerProductIds;
+      }
+      if (saleProductIds?.length) {
+        productIds = productIds ? intersect(productIds, saleProductIds) : saleProductIds;
+      }
+      if (productIds && productIds.length === 0) {
+        productIds = ["__none__"];
+      }
+
       // Collect category IDs from repeated `categoryId` params or comma-separated `categoryIds`
       const catRepeated = searchParams.getAll("categoryId").filter(Boolean);
       const catCsv = (searchParams.get("categoryIds") || "")
@@ -27,6 +78,7 @@ export class StorefrontProductsController {
         page: parseInt(searchParams.get("page") || "1"),
         limit: parseInt(searchParams.get("limit") || "12"),
         categoryIds: categoryIds.length ? categoryIds : undefined,
+        productIds,
         minPrice: searchParams.get("minPrice")
           ? parseFloat(searchParams.get("minPrice")!)
           : undefined,
@@ -38,7 +90,7 @@ export class StorefrontProductsController {
           : undefined,
         search: searchParams.get("q") || searchParams.get("search") || undefined,
         inStock: searchParams.get("inStock") === "true",
-        onSale: searchParams.get("onSale") === "true",
+        onSale: onSaleRequested && !saleProductIds ? true : false,
         sortBy: (searchParams.get("sortBy") as any) || "newest",
       };
 

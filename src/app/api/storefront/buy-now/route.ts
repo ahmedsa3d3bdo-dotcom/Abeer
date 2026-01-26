@@ -3,16 +3,30 @@ import { z } from "zod";
 import { v4 as uuidv4 } from "uuid";
 import { storefrontCartService } from "@/server/storefront/services/cart.service";
 
-const schema = z.object({
+const singleSchema = z.object({
   productId: z.string().uuid(),
   variantId: z.string().uuid().optional(),
   quantity: z.number().int().min(1).default(1),
 });
 
+const multiSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        productId: z.string().uuid(),
+        variantId: z.string().uuid().optional(),
+        quantity: z.number().int().min(1).default(1),
+      }),
+    )
+    .min(1),
+});
+
+const schema = z.union([singleSchema, multiSchema]);
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { productId, variantId, quantity } = schema.parse(body);
+    const parsed = schema.parse(body);
 
     const prevCartId = request.cookies.get("cart_id")?.value || null;
 
@@ -23,12 +37,24 @@ export async function POST(request: NextRequest) {
       await storefrontCartService.clearCart(cart.id);
     } catch {}
 
-    const updated = await storefrontCartService.addItem({
-      cartId: cart.id,
-      productId,
-      variantId,
-      quantity,
-    });
+    let updated = cart;
+    if ("items" in parsed) {
+      for (const it of parsed.items) {
+        updated = await storefrontCartService.addItem({
+          cartId: updated.id,
+          productId: it.productId,
+          variantId: it.variantId,
+          quantity: it.quantity,
+        });
+      }
+    } else {
+      updated = await storefrontCartService.addItem({
+        cartId: cart.id,
+        productId: parsed.productId,
+        variantId: parsed.variantId,
+        quantity: parsed.quantity,
+      });
+    }
 
     const response = NextResponse.json({
       success: true,

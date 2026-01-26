@@ -108,6 +108,8 @@ export function ProductCard({ product, className, onQuickView }: ProductCardProp
 
   const isOutOfStock = product.stockStatus === "out_of_stock";
   const hasDiscount = !!product.compareAtPrice && product.compareAtPrice > product.price;
+  const isSale = !!product.isOnSale || product.badge === "sale";
+  const displayBadge = isSale ? "sale" : product.badge;
   const discountPercent = hasDiscount ? Math.round(((product.compareAtPrice! - product.price) / product.compareAtPrice!) * 100) : 0;
 
   return (
@@ -151,7 +153,7 @@ export function ProductCard({ product, className, onQuickView }: ProductCardProp
               -{discountPercent}%
             </Badge>
           )}
-          {product.badge && <ProductBadge type={product.badge} />}
+          {displayBadge && <ProductBadge type={displayBadge} />}
           {isOutOfStock && <ProductBadge type="out-of-stock" />}
         </div>
 

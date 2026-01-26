@@ -96,9 +96,44 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
       subtotal: Number(order.subtotal || 0),
       shipping: Number(order.shipping || 0),
       tax: Number(order.tax || 0),
+      discount: Number(order.discount || 0),
       total: Number(order.total || 0),
     };
   }, [order]);
+
+  const discountLines = useMemo(() => {
+    if (!order) return [] as any[];
+    if (Array.isArray((order as any)?.discounts)) return (order as any).discounts;
+    if (Number((order as any)?.discount || 0) > 0) return [{ id: "order-discount", code: null, amount: (order as any).discount }];
+    return [] as any[];
+  }, [order]);
+
+  const promotionNames = useMemo(
+    () =>
+      discountLines
+        .filter((d: any) => Number(d?.amount ?? 0) === 0)
+        .map((d: any) => d?.name || d?.discountName || d?.code || "")
+        .filter(Boolean)
+        .join(" • "),
+    [discountLines],
+  );
+
+  const monetaryDiscountLines = useMemo(() => discountLines.filter((d: any) => Number(d?.amount ?? 0) > 0), [discountLines]);
+
+  const giftValue = useMemo(() => {
+    if (!order?.items) return 0;
+    return (order.items as any[]).reduce((sum, it) => {
+      const isGift = Number(it.price ?? 0) === 0 && Number(it.total ?? 0) === 0;
+      if (!isGift) return sum;
+      const qty = Number(it.quantity || 0);
+      if (!Number.isFinite(qty) || qty <= 0) return sum;
+      const ref = Number(it.referencePrice ?? 0);
+      if (!Number.isFinite(ref) || ref <= 0) return sum;
+      return sum + ref * qty;
+    }, 0);
+  }, [order]);
+
+  const displaySubtotal = useMemo(() => totals.subtotal + (Number.isFinite(giftValue) ? giftValue : 0), [totals.subtotal, giftValue]);
 
   function InvoiceDocument() {
     return (
@@ -162,22 +197,30 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
           {/* Items */}
           <div className="rounded-md border">
             <div className="grid grid-cols-12 gap-2 border-b p-2 text-xs text-muted-foreground">
-              <div className="col-span-7">Item</div>
+              <div className="col-span-5">Item</div>
+              <div className="col-span-2">Promotion</div>
               <div className="col-span-2 text-right">Qty</div>
               <div className="col-span-1 text-right">Price</div>
               <div className="col-span-2 text-right">Total</div>
             </div>
             {order.items.map((it: any) => (
-              <div key={it.id} className="grid grid-cols-12 gap-2 p-2 text-sm">
-                <div className="col-span-7">
-                  <div className="font-medium">{it.name}</div>
-                  {it.variant && <div className="text-xs text-muted-foreground">{it.variant}</div>}
-                  {it.sku && <div className="text-xs text-muted-foreground">SKU: {it.sku}</div>}
-                </div>
-                <div className="col-span-2 text-right">{it.quantity}</div>
-                <div className="col-span-1 text-right">${Number(it.price).toFixed(2)}</div>
-                <div className="col-span-2 text-right">${Number(it.total).toFixed(2)}</div>
-              </div>
+              (() => {
+                const isGift = Number(it.price ?? 0) === 0 && Number(it.total ?? 0) === 0;
+                return (
+                  <div key={it.id} className="grid grid-cols-12 gap-2 p-2 text-sm">
+                    <div className="col-span-5">
+                      <div className="font-medium">{it.name}</div>
+                      {isGift ? <div className="text-xs font-medium text-green-700 dark:text-green-300">Free gift</div> : null}
+                      {it.variant && <div className="text-xs text-muted-foreground">{it.variant}</div>}
+                      {it.sku && <div className="text-xs text-muted-foreground">SKU: {it.sku}</div>}
+                    </div>
+                    <div className="col-span-2 truncate">{isGift ? (promotionNames || "—") : ""}</div>
+                    <div className="col-span-2 text-right">{it.quantity}</div>
+                    <div className="col-span-1 text-right">{isGift ? "FREE" : `$${Number(it.price).toFixed(2)}`}</div>
+                    <div className="col-span-2 text-right">{isGift ? "FREE" : `$${Number(it.total).toFixed(2)}`}</div>
+                  </div>
+                );
+              })()
             ))}
           </div>
 
@@ -185,8 +228,23 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
           <div className="mt-6 flex flex-col items-end gap-1 text-sm">
             <div className="flex w-full max-w-sm justify-between">
               <span className="text-muted-foreground">Subtotal</span>
-              <span>${totals.subtotal.toFixed(2)}</span>
+              <span>${displaySubtotal.toFixed(2)}</span>
             </div>
+            {giftValue > 0 ? (
+              <div className="flex w-full max-w-sm justify-between">
+                <span className="text-muted-foreground">Discount{promotionNames ? ` (${promotionNames})` : ""}</span>
+                <span>-${giftValue.toFixed(2)}</span>
+              </div>
+            ) : null}
+            {monetaryDiscountLines.map((d: any) => (
+              <div key={String(d.id)} className="flex w-full max-w-sm justify-between">
+                <span className="text-muted-foreground">
+                  Discount
+                  {d?.code ? ` (${String(d.code)})` : d?.name ? ` (${String(d.name)})` : ""}
+                </span>
+                <span>-${Number(d?.amount || 0).toFixed(2)}</span>
+              </div>
+            ))}
             <div className="flex w-full max-w-sm justify-between">
               <span className="text-muted-foreground">Shipping</span>
               <span>${totals.shipping.toFixed(2)}</span>

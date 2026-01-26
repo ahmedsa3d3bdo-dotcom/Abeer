@@ -42,6 +42,7 @@ export default function ShopPage() {
     maxPrice: undefined as number | undefined,
     minRating: undefined as number | undefined,
     categoryIds: undefined as string[] | undefined,
+    offerId: undefined as string | undefined,
     inStock: false,
     onSale: false,
     isFeatured: false,
@@ -58,6 +59,7 @@ export default function ShopPage() {
     const inStock = sp.get("inStock") === "true";
     const onSale = sp.get("onSale") === "true";
     const isFeatured = sp.get("isFeatured") === "true";
+    const offerId = sp.get("offerId") || undefined;
     const q = sp.get("q") || sp.get("search") || undefined;
     return {
       page: Number.isNaN(page) ? 1 : page,
@@ -69,6 +71,7 @@ export default function ShopPage() {
       inStock,
       onSale,
       isFeatured,
+      offerId,
       search: q || undefined,
     };
   };
@@ -77,6 +80,33 @@ export default function ShopPage() {
     queryKey: ["categories"],
     queryFn: () => api.get("/api/storefront/categories"),
   });
+
+  const offersDataQuery = useQuery<{
+    items: Array<{ id: string; name: string; type: string; value: string; metadata?: any }>;
+  }>({
+    queryKey: ["offers"],
+    queryFn: () => api.get("/api/storefront/offers"),
+  });
+
+  const activeOffer = useMemo(() => {
+    if (!filters.offerId) return null;
+    const items = (offersDataQuery.data as any)?.items || (offersDataQuery.data as any)?.data?.items || [];
+    if (!Array.isArray(items)) return null;
+    return items.find((o: any) => String(o?.id) === String(filters.offerId)) || null;
+  }, [filters.offerId, offersDataQuery.data]);
+
+  const offerHint = useMemo(() => {
+    if (!filters.offerId) return null;
+    const md: any = activeOffer?.metadata || null;
+    const kind = String(md?.offerKind || md?.kind || "");
+    if (kind === "bxgy_bundle") {
+      return "This is a bundle deal. Add the bundle items to your cart and the free gift items will be applied automatically.";
+    }
+    if (kind === "bxgy_generic") {
+      return "This is a Buy X Get Y deal. Add enough quantity of eligible products to your cart to trigger the free items.";
+    }
+    return "You’re viewing only products included in this offer. To change it, pick another offer in Filters, or clear the offer filter.";
+  }, [activeOffer, filters.offerId]);
 
   const categoriesTree: any[] = useMemo(
     () => (categoriesDataQuery.data as any)?.data?.categories || categoriesDataQuery.data?.categories || [],
@@ -139,6 +169,7 @@ export default function ShopPage() {
     if (filters.onSale) params.set("onSale", "true");
     if (filters.isFeatured) params.set("isFeatured", "true");
     if (filters.search) params.set("q", filters.search);
+    if (filters.offerId) params.set("offerId", String(filters.offerId));
     if (filters.categoryIds && filters.categoryIds.length) {
       const slugs = filters.categoryIds
         .map((id) => categoryIndex.idToSlug.get(id) || "")
@@ -177,6 +208,7 @@ export default function ShopPage() {
     maxPrice: undefined as number | undefined,
     minRating: undefined as number | undefined,
     categoryIds: undefined as string[] | undefined,
+    offerId: undefined as string | undefined,
     inStock: false,
     onSale: false,
     isFeatured: false,
@@ -202,6 +234,7 @@ export default function ShopPage() {
       if (filters.onSale) params.set("onSale", "true");
       if (filters.isFeatured) params.set("isFeatured", "true");
       if (filters.search) params.set("q", filters.search);
+      if (filters.offerId) params.set("offerId", String(filters.offerId));
 
       return api.get(`/api/storefront/products?${params.toString()}`);
     },
@@ -224,6 +257,7 @@ export default function ShopPage() {
       maxPrice: undefined,
       minRating: undefined,
       categoryIds: undefined,
+      offerId: undefined,
       inStock: false,
       onSale: false,
       isFeatured: false,
@@ -236,6 +270,7 @@ export default function ShopPage() {
     filters.maxPrice ||
     filters.minRating ||
     (filters.categoryIds && filters.categoryIds.length > 0) ||
+    !!filters.offerId ||
     filters.inStock ||
     filters.onSale ||
     filters.isFeatured ||
@@ -319,6 +354,7 @@ export default function ShopPage() {
     if (filters.minRating) chips.push({ label: `${filters.minRating}+ stars`, onClear: () => handleFilterChange({ minRating: undefined }) });
     if (filters.inStock) chips.push({ label: "In stock", onClear: () => handleFilterChange({ inStock: false }) });
     if (filters.onSale) chips.push({ label: "On sale", onClear: () => handleFilterChange({ onSale: false }) });
+    if (filters.offerId) chips.push({ label: "Offer", onClear: () => handleFilterChange({ offerId: undefined }) });
     if (filters.search) chips.push({ label: `Search: ${filters.search}`, onClear: () => handleFilterChange({ search: undefined }) });
     return chips;
   }, [filters, catMap]);
@@ -440,6 +476,7 @@ export default function ShopPage() {
                   maxPrice: undefined,
                   minRating: undefined,
                   categoryIds: undefined,
+                  offerId: undefined,
                   inStock: false,
                   onSale: false,
                   isFeatured: false,
@@ -456,6 +493,7 @@ export default function ShopPage() {
                   maxPrice: pendingFilters.maxPrice,
                   minRating: pendingFilters.minRating,
                   categoryIds: pendingFilters.categoryIds,
+                  offerId: pendingFilters.offerId,
                   inStock: pendingFilters.inStock,
                   onSale: pendingFilters.onSale,
                   isFeatured: pendingFilters.isFeatured,
@@ -601,6 +639,27 @@ export default function ShopPage() {
       </div>
 
       {/* Active filter chips */}
+      {filters.offerId && (
+        <div className="mb-4 rounded-lg border bg-muted/30 p-3 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-sm font-medium">
+              Offer filter active{activeOffer?.name ? `: ${String(activeOffer.name)}` : ""}
+            </div>
+            {offerHint ? <div className="text-xs text-muted-foreground mt-1">{offerHint}</div> : null}
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="shrink-0"
+            onClick={() => handleFilterChange({ offerId: undefined })}
+          >
+            <X className="mr-2 h-4 w-4" />
+            Clear offer
+          </Button>
+        </div>
+      )}
+
       {activeFilterChips.length > 0 && (
         <div className="mb-6 flex flex-wrap items-center gap-2">
           {activeFilterChips.map((chip, i) => (

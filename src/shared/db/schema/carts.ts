@@ -1,4 +1,4 @@
-import { pgTable, varchar, text, timestamp, uuid, integer, decimal, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, varchar, text, timestamp, uuid, integer, decimal, index, uniqueIndex, jsonb, boolean } from "drizzle-orm/pg-core";
 import { cartStatusEnum } from "../enums";
 import { users } from "./users";
 import { products, productVariants } from "./products";
@@ -14,6 +14,7 @@ export const carts = pgTable(
     currency: varchar("currency", { length: 3 }).default("CAD").notNull(),
     appliedDiscountId: uuid("applied_discount_id"),
     appliedDiscountCode: varchar("applied_discount_code", { length: 50 }),
+    giftSuppressions: jsonb("gift_suppressions").$type<Record<string, unknown>>().default({} as any).notNull(),
     subtotal: decimal("subtotal", { precision: 10, scale: 2 }).default("0.00").notNull(),
     taxAmount: decimal("tax_amount", { precision: 10, scale: 2 }).default("0.00").notNull(),
     shippingAmount: decimal("shipping_amount", { precision: 10, scale: 2 }).default("0.00").notNull(),
@@ -45,6 +46,8 @@ export const cartItems = pgTable(
     quantity: integer("quantity").default(1).notNull(),
     unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).default("0.00").notNull(),
     totalPrice: decimal("total_price", { precision: 10, scale: 2 }).default("0.00").notNull(),
+    isGift: boolean("is_gift").default(false).notNull(),
+    giftDiscountId: uuid("gift_discount_id"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => ({

@@ -159,6 +159,32 @@ export default function OrdersPage() {
       total: Number(d?.order?.totalAmount ?? 0),
     };
 
+    const allDiscountLines: any[] = Array.isArray(d?.orderDiscounts)
+      ? d.orderDiscounts
+      : Number(d?.order?.discountAmount || 0) > 0
+        ? [{ id: "order-discount", code: d?.order?.appliedDiscountCode || null, amount: d?.order?.discountAmount }]
+        : [];
+
+    const promotionNames = allDiscountLines
+      .filter((od) => Number(od?.amount ?? 0) === 0)
+      .map((od) => od?.discountName || od?.code || "")
+      .filter(Boolean)
+      .join(" • ");
+
+    const discountLines = allDiscountLines.filter((od) => Number(od?.amount ?? 0) > 0);
+
+    const giftValue = (d?.items || []).reduce((sum: number, it: any) => {
+      const isGift = Number(it.unitPrice ?? 0) === 0 && Number(it.totalPrice ?? 0) === 0;
+      if (!isGift) return sum;
+      const qty = Number(it.quantity || 0);
+      if (!Number.isFinite(qty) || qty <= 0) return sum;
+      const ref = parseFloat(String(it.variantPrice ?? it.productPrice ?? 0));
+      if (!Number.isFinite(ref) || ref <= 0) return sum;
+      return sum + ref * qty;
+    }, 0);
+
+    const displaySubtotal = totals.subtotal + (Number.isFinite(giftValue) ? giftValue : 0);
+
     const billedTo = d?.shippingAddress
       ? {
           name: `${d.shippingAddress.firstName ?? ""} ${d.shippingAddress.lastName ?? ""}`.trim(),
@@ -232,34 +258,48 @@ export default function OrdersPage() {
 
           <div className="rounded-md border">
             <div className="grid grid-cols-12 gap-2 border-b p-2 text-xs text-muted-foreground">
-              <div className="col-span-7">Item</div>
+              <div className="col-span-5">Item</div>
+              <div className="col-span-2">Promotion</div>
               <div className="col-span-2 text-right">Qty</div>
               <div className="col-span-1 text-right">Price</div>
               <div className="col-span-2 text-right">Total</div>
             </div>
             {(d?.items || []).map((it: any) => (
+              (() => {
+                const isGift = Number(it.unitPrice ?? 0) === 0 && Number(it.totalPrice ?? 0) === 0;
+                return (
               <div key={it.id} className="grid grid-cols-12 gap-2 p-2 text-sm">
-                <div className="col-span-7">
+                <div className="col-span-5">
                   <div className="font-medium">{it.productName}</div>
+                  {isGift ? <div className="text-xs font-medium text-green-700 dark:text-green-300">Free gift</div> : null}
                   {it.variantName && <div className="text-xs text-muted-foreground">{it.variantName}</div>}
                   {it.sku && <div className="text-xs text-muted-foreground">SKU: {it.sku}</div>}
                 </div>
+                <div className="col-span-2 truncate">{isGift ? (promotionNames || "—") : ""}</div>
                 <div className="col-span-2 text-right">{it.quantity}</div>
                 <div className="col-span-1 text-right">
-                  {formatCurrency(Number(it.unitPrice ?? 0), { currency, locale })}
+                  {isGift ? "FREE" : formatCurrency(Number(it.unitPrice ?? 0), { currency, locale })}
                 </div>
                 <div className="col-span-2 text-right">
-                  {formatCurrency(Number(it.totalPrice ?? 0), { currency, locale })}
+                  {isGift ? "FREE" : formatCurrency(Number(it.totalPrice ?? 0), { currency, locale })}
                 </div>
               </div>
+                );
+              })()
             ))}
           </div>
 
           <div className="mt-6 flex flex-col items-end gap-1 text-sm">
             <div className="flex w-full max-w-sm justify-between">
               <span className="text-muted-foreground">Subtotal</span>
-              <span>{formatCurrency(totals.subtotal, { currency, locale })}</span>
+              <span>{formatCurrency(displaySubtotal, { currency, locale })}</span>
             </div>
+            {giftValue > 0 ? (
+              <div className="flex w-full max-w-sm justify-between">
+                <span className="text-muted-foreground">Discount{promotionNames ? ` (${promotionNames})` : ""}</span>
+                <span>-{formatCurrency(giftValue, { currency, locale })}</span>
+              </div>
+            ) : null}
             <div className="flex w-full max-w-sm justify-between">
               <span className="text-muted-foreground">Shipping</span>
               <span>{formatCurrency(totals.shipping, { currency, locale })}</span>
@@ -268,6 +308,15 @@ export default function OrdersPage() {
               <span className="text-muted-foreground">Tax</span>
               <span>{formatCurrency(totals.tax, { currency, locale })}</span>
             </div>
+            {discountLines.map((od) => (
+              <div key={String(od.id)} className="flex w-full max-w-sm justify-between">
+                <span className="text-muted-foreground">
+                  Discount
+                  {od?.code ? ` (${String(od.code)})` : od?.discountName ? ` (${String(od.discountName)})` : ""}
+                </span>
+                <span>-{formatCurrency(Number(od?.amount ?? 0), { currency, locale })}</span>
+              </div>
+            ))}
             <Separator className="my-2 w-full max-w-sm" />
             <div className="flex w-full max-w-sm justify-between text-base font-semibold">
               <span>Total</span>
@@ -280,6 +329,8 @@ export default function OrdersPage() {
             <p className="mt-1">If you have any questions about this invoice, please contact support.</p>
           </div>
         </div>
+
+        {null}
       </div>
     );
   }
@@ -500,15 +551,22 @@ export default function OrdersPage() {
               <div key={it.id} className="grid grid-cols-6 gap-2 border-b last:border-b-0 p-2 text-sm">
                 <div className="col-span-3">
                   <div className="font-medium">{it.productName}</div>
+                  {Number(it.unitPrice ?? 0) === 0 && Number(it.totalPrice ?? 0) === 0 ? (
+                    <div className="text-xs font-medium text-green-700 dark:text-green-300">Free gift</div>
+                  ) : null}
                   {it.variantName && <div className="text-xs text-muted-foreground">{it.variantName}</div>}
                   {it.sku && <div className="text-xs text-muted-foreground">SKU: {it.sku}</div>}
                 </div>
                 <div className="text-right">{it.quantity}</div>
                 <div className="text-right">
-                  {formatCurrency(Number(it.unitPrice ?? 0), { currency: d.order?.currency || "CAD", locale: "en-CA" })}
+                  {Number(it.unitPrice ?? 0) === 0 && Number(it.totalPrice ?? 0) === 0
+                    ? "FREE"
+                    : formatCurrency(Number(it.unitPrice ?? 0), { currency: d.order?.currency || "CAD", locale: "en-CA" })}
                 </div>
                 <div className="text-right">
-                  {formatCurrency(Number(it.totalPrice ?? 0), { currency: d.order?.currency || "CAD", locale: "en-CA" })}
+                  {Number(it.unitPrice ?? 0) === 0 && Number(it.totalPrice ?? 0) === 0
+                    ? "FREE"
+                    : formatCurrency(Number(it.totalPrice ?? 0), { currency: d.order?.currency || "CAD", locale: "en-CA" })}
                 </div>
               </div>
             ))}

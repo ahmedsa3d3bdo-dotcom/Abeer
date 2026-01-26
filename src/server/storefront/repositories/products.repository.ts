@@ -11,6 +11,7 @@ interface ProductListParams {
   page?: number;
   limit?: number;
   categoryIds?: string[];
+  productIds?: string[];
   minPrice?: number;
   maxPrice?: number;
   minRating?: number;
@@ -44,6 +45,10 @@ export class StorefrontProductsRepository {
           ilike(schema.products.sku, like)
         ) as any
       );
+    }
+
+    if (params.productIds && params.productIds.length > 0) {
+      filters.push(inArray(schema.products.id, params.productIds as any));
     }
 
     // Price range filter
@@ -202,6 +207,19 @@ export class StorefrontProductsRepository {
       limit,
       hasMore: offset + items.length < Number(count),
     };
+  }
+
+  async listCompareAtSaleProductIds() {
+    const rows = await db
+      .select({ id: schema.products.id })
+      .from(schema.products)
+      .where(
+        and(
+          eq(schema.products.status, "active"),
+          sql`${schema.products.compareAtPrice} is not null and ${schema.products.compareAtPrice} > ${schema.products.price}` as any
+        )
+      );
+    return rows.map((r) => String(r.id));
   }
 
   /**

@@ -66,6 +66,14 @@ export class StorefrontCheckoutService {
 
     const orderNumber = await nextDocumentNumber("ORD");
 
+    const giftDiscountIds = Array.from(
+      new Set(
+        (cart.items as any[])
+          .filter((it) => Boolean(it?.isGift) && Boolean(it?.giftDiscountId))
+          .map((it) => String(it.giftDiscountId)),
+      ),
+    );
+
     // Get authenticated user (if any)
     const session = await auth();
     const userId = session?.user?.id as string | undefined;
@@ -260,8 +268,25 @@ export class StorefrontCheckoutService {
           // Increment usageCount (best-effort)
           await tx
             .update(schema.discounts)
-            .set({ usageCount: (schema.discounts.usageCount as any) + 1 } as any)
+            .set({ usageCount: sql`${schema.discounts.usageCount} + 1` } as any)
             .where(eq(schema.discounts.id, appliedDiscount.id));
+        } catch {}
+      }
+
+      if (order && giftDiscountIds.length) {
+        try {
+          const existing = new Set<string>();
+          if (appliedDiscount?.id) existing.add(String(appliedDiscount.id));
+          for (const discId of giftDiscountIds) {
+            if (!discId || existing.has(String(discId))) continue;
+            await tx.insert(schema.orderDiscounts).values({
+              orderId: order.id,
+              discountId: discId as any,
+              code: null,
+              amount: "0.00",
+            } as any);
+            existing.add(String(discId));
+          }
         } catch {}
       }
 

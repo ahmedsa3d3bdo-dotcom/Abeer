@@ -23,6 +23,7 @@ const listQuerySchema = z.object({
   status: z.enum(["draft", "active", "expired", "archived"]).optional(),
   type: z.enum(["percentage", "fixed_amount", "free_shipping"]).optional(),
   scope: z.enum(["all", "products", "categories", "collections", "customer_groups"]).optional(),
+  kind: z.enum(["coupon", "scheduled_offer", "bxgy_generic", "bxgy_bundle", "bundle_offer"]).optional(),
   isAutomatic: z.coerce.boolean().optional(),
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
@@ -30,9 +31,19 @@ const listQuerySchema = z.object({
   sort: z.enum(["createdAt.desc", "createdAt.asc", "startsAt.desc", "startsAt.asc"]).optional(),
 });
 
-const upsertSchema = z.object({
+const upsertSchemaObject = z.object({
   name: z.string().min(1),
-  code: z.string().max(50).nullable().optional(),
+  code: z
+    .string()
+    .max(50)
+    .nullable()
+    .optional()
+    .transform((v) => {
+      if (v == null) return null;
+      const s = String(v).trim();
+      if (!s) return null;
+      return s.toUpperCase();
+    }),
   type: z.enum(["percentage", "fixed_amount", "free_shipping"]),
   value: z.string(),
   scope: z.enum(["all", "products", "categories", "collections", "customer_groups"]).default("all"),
@@ -45,6 +56,18 @@ const upsertSchema = z.object({
   productIds: z.array(z.string().uuid()).optional(),
   categoryIds: z.array(z.string().uuid()).optional(),
   metadata: z.any().optional(),
+});
+
+const createSchema = upsertSchemaObject.superRefine((data, ctx) => {
+  if (data.isAutomatic && data.code) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Automatic discounts cannot have a code" });
+  }
+});
+
+const updateSchema = upsertSchemaObject.partial().superRefine((data, ctx) => {
+  if (data.isAutomatic && data.code) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Automatic discounts cannot have a code" });
+  }
 });
 
 export class DiscountsController {
@@ -74,7 +97,7 @@ export class DiscountsController {
   static async create(request: NextRequest) {
     try {
       const session = await requirePermission(request, "discounts.manage");
-      const body = await validateBody(request, upsertSchema);
+      const body: any = await validateBody(request, createSchema);
       const payload: any = { ...body };
       if (body.startsAt) payload.startsAt = new Date(body.startsAt);
       if (body.endsAt) payload.endsAt = new Date(body.endsAt);
@@ -99,7 +122,7 @@ export class DiscountsController {
   static async update(request: NextRequest, id: string) {
     try {
       const session = await requirePermission(request, "discounts.manage");
-      const body = await validateBody(request, upsertSchema.partial());
+      const body: any = await validateBody(request, updateSchema);
       const payload: any = { ...body };
       if (body.startsAt !== undefined) payload.startsAt = body.startsAt ? new Date(body.startsAt) : null;
       if (body.endsAt !== undefined) payload.endsAt = body.endsAt ? new Date(body.endsAt) : null;
@@ -154,6 +177,27 @@ export class DiscountsController {
       if (query.status) filters.push(sql`${schema.discounts.status} = ${query.status}`);
       if (query.type) filters.push(sql`${schema.discounts.type} = ${query.type}`);
       if (query.scope) filters.push(sql`${schema.discounts.scope} = ${query.scope}`);
+      if (query.kind) {
+        if (query.kind === "coupon") {
+          filters.push(sql`${schema.discounts.isAutomatic} = false`);
+        } else if (query.kind === "scheduled_offer") {
+          filters.push(sql`${schema.discounts.isAutomatic} = true`);
+          filters.push(sql`coalesce(${schema.discounts.metadata} ->> 'kind', '') = 'offer'`);
+          filters.push(sql`coalesce(${schema.discounts.metadata} ->> 'offerKind', '') <> 'bundle'`);
+        } else if (query.kind === "bundle_offer") {
+          filters.push(sql`${schema.discounts.isAutomatic} = true`);
+          filters.push(sql`coalesce(${schema.discounts.metadata} ->> 'kind', '') = 'offer'`);
+          filters.push(sql`coalesce(${schema.discounts.metadata} ->> 'offerKind', '') = 'bundle'`);
+        } else if (query.kind === "bxgy_generic") {
+          filters.push(sql`${schema.discounts.isAutomatic} = true`);
+          filters.push(sql`coalesce(${schema.discounts.metadata} ->> 'kind', '') = 'deal'`);
+          filters.push(sql`coalesce(${schema.discounts.metadata} ->> 'offerKind', '') = 'bxgy_generic'`);
+        } else if (query.kind === "bxgy_bundle") {
+          filters.push(sql`${schema.discounts.isAutomatic} = true`);
+          filters.push(sql`coalesce(${schema.discounts.metadata} ->> 'kind', '') = 'deal'`);
+          filters.push(sql`coalesce(${schema.discounts.metadata} ->> 'offerKind', '') = 'bxgy_bundle'`);
+        }
+      }
       if (typeof query.isAutomatic === "boolean") filters.push(sql`${schema.discounts.isAutomatic} = ${query.isAutomatic}`);
       if (query.dateFrom) filters.push(sql`${schema.discounts.createdAt} >= ${new Date(query.dateFrom)}`);
       if (query.dateTo) filters.push(sql`${schema.discounts.createdAt} <= ${new Date(query.dateTo)}`);
