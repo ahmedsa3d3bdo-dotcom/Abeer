@@ -562,6 +562,63 @@ export default function OrdersPage() {
   function DrawerContent({ d }: { d: any }) {
     const currency = d?.order?.currency || "CAD";
     const locale = "en-CA";
+
+    const allDiscountLines: any[] = Array.isArray(d?.orderDiscounts)
+      ? d.orderDiscounts
+      : Number(d?.order?.discountAmount || 0) > 0
+        ? [{ id: "order-discount", code: d?.order?.appliedDiscountCode || null, amount: d?.order?.discountAmount }]
+        : [];
+
+    const offerPromotionNames = allDiscountLines
+      .filter((od) => Number(od?.amount ?? 0) === 0)
+      .filter((od) => {
+        if (String(od?.discountType || "") === "free_shipping") return false;
+        const md: any = (od as any)?.discountMetadata || null;
+        return md?.kind === "offer" && md?.offerKind === "standard";
+      })
+      .map((od) => od?.discountName || od?.code || "")
+      .filter(Boolean)
+      .join(" • ");
+
+    const dealPromotionNames = allDiscountLines
+      .filter((od) => Number(od?.amount ?? 0) === 0)
+      .filter((od) => {
+        const md: any = (od as any)?.discountMetadata || null;
+        return md?.kind === "deal" && (md?.offerKind === "bxgy_generic" || md?.offerKind === "bxgy_bundle");
+      })
+      .map((od) => od?.discountName || od?.code || "")
+      .filter(Boolean)
+      .join(" • ");
+
+    const promotionNames = [offerPromotionNames, dealPromotionNames].filter(Boolean).join(" • ");
+
+    const discountLines = allDiscountLines.filter((od) => Number(od?.amount ?? 0) > 0);
+
+    const giftValue = (d?.items || []).reduce((sum: number, it: any) => {
+      const isGift = Number(it.unitPrice ?? 0) === 0 && Number(it.totalPrice ?? 0) === 0;
+      if (!isGift) return sum;
+      const qty = Number(it.quantity || 0);
+      if (!Number.isFinite(qty) || qty <= 0) return sum;
+      const ref = parseFloat(String(it.variantPrice ?? it.productPrice ?? 0));
+      if (!Number.isFinite(ref) || ref <= 0) return sum;
+      return sum + ref * qty;
+    }, 0);
+
+    const offerSavings = (d?.items || []).reduce((sum: number, it: any) => {
+      if (!offerPromotionNames) return sum;
+      const isGift = Number(it.unitPrice ?? 0) === 0 && Number(it.totalPrice ?? 0) === 0;
+      if (isGift) return sum;
+      const qty = Number(it.quantity || 0);
+      if (!Number.isFinite(qty) || qty <= 0) return sum;
+      const base = parseFloat(String(it.variantPrice ?? it.productPrice ?? 0));
+      const unit = Number(it.unitPrice ?? 0);
+      if (!Number.isFinite(base) || base <= 0) return sum;
+      if (!Number.isFinite(unit) || unit <= 0) return sum;
+      if (unit >= base) return sum;
+      return sum + (base - unit) * qty;
+    }, 0);
+
+    const promotionSavings = Number(giftValue || 0) + Number(offerSavings || 0);
     const saleSavings = (d?.items || []).reduce((sum: number, it: any) => {
       const isGift = Number(it.unitPrice ?? 0) === 0 && Number(it.totalPrice ?? 0) === 0;
       if (isGift) return sum;
@@ -619,6 +676,21 @@ export default function OrdersPage() {
             {saleSavings > 0 ? (
               <div className="text-xs text-muted-foreground mt-0.5">Sale savings: -{formatCurrency(saleSavings, { currency, locale })}</div>
             ) : null}
+            {promotionNames && promotionSavings <= 0 ? (
+              <div className="text-xs text-muted-foreground mt-0.5">Promotion ({promotionNames}): —</div>
+            ) : null}
+            {promotionSavings > 0 ? (
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Promotion savings{promotionNames ? ` (${promotionNames})` : ""}: -{formatCurrency(promotionSavings, { currency, locale })}
+              </div>
+            ) : null}
+            {discountLines.map((od) => (
+              <div key={String(od.id)} className="text-xs text-muted-foreground mt-0.5">
+                Discount
+                {od?.code ? ` (${String(od.code)})` : od?.discountName ? ` (${String(od.discountName)})` : ""}: -
+                {formatCurrency(Number(od?.amount ?? 0), { currency, locale })}
+              </div>
+            ))}
           </div>
         </div>
 
