@@ -837,23 +837,39 @@ export class StorefrontCartRepository {
       if (offers.length && items.length) {
         for (const item of items as any[]) {
           if (Boolean((item as any).isGift)) continue;
-          const baseUnit = parseFloat(String(item.unitPrice));
           const qty = Number(item.quantity || 0);
-          if (!Number.isFinite(baseUnit) || baseUnit <= 0 || !Number.isFinite(qty) || qty <= 0) continue;
+          if (!Number.isFinite(qty) || qty <= 0) continue;
 
-          const picked = storefrontOffersService.pickBestOfferForProduct({
-            offers,
-            productId: String(item.productId),
-            categoryIds: [],
-            baseUnitPrice: baseUnit,
-          });
-          if (!picked) continue;
+          let baseUnit = 0;
+          if (item.variantId) {
+            const [v] = await db
+              .select({ price: schema.productVariants.price })
+              .from(schema.productVariants)
+              .where(eq(schema.productVariants.id, item.variantId as any))
+              .limit(1);
+            baseUnit = parseFloat(String((v as any)?.price ?? 0));
+          }
+          if (!Number.isFinite(baseUnit) || baseUnit <= 0) {
+            const [p] = await db
+              .select({ price: schema.products.price })
+              .from(schema.products)
+              .where(eq(schema.products.id, item.productId as any))
+              .limit(1);
+            baseUnit = parseFloat(String((p as any)?.price ?? 0));
+          }
+          if (!Number.isFinite(baseUnit) || baseUnit <= 0) continue;
 
-          const nextUnit = Number(picked.discountedUnitPrice);
-          if (!Number.isFinite(nextUnit) || nextUnit <= 0) continue;
-          if (Number(nextUnit.toFixed(2)) === Number(baseUnit.toFixed(2))) continue;
+          const catRows = await db
+            .select({ categoryId: schema.productCategories.categoryId })
+            .from(schema.productCategories)
+            .where(eq(schema.productCategories.productId, item.productId as any));
+          const categoryIds = catRows.map((r) => String((r as any).categoryId)).filter(Boolean);
 
+          const picked = storefrontOffersService.pickBestOfferForProduct({ offers, productId: String(item.productId), categoryIds, baseUnitPrice: baseUnit });
+          const discounted = Number(picked?.discountedUnitPrice ?? baseUnit);
+          const nextUnit = Number.isFinite(discounted) && discounted > 0 && discounted < baseUnit ? discounted : baseUnit;
           const nextTotal = nextUnit * qty;
+
           await db
             .update(schema.cartItems)
             .set({ unitPrice: nextUnit.toFixed(2), totalPrice: nextTotal.toFixed(2) } as any)
