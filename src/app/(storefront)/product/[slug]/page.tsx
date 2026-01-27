@@ -47,7 +47,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
         canonical: `${baseUrl}/product/${product.slug}`,
       },
       openGraph: {
-        type: "product",
+        type: "website",
         url: `${baseUrl}/product/${product.slug}`,
         title: product.metaTitle || product.name,
         description: product.metaDescription || product.shortDescription || product.description,
@@ -87,7 +87,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
           canonical: `${baseUrl}/product/${product.slug}`,
         },
         openGraph: {
-          type: "product",
+          type: "website",
           url: `${baseUrl}/product/${product.slug}`,
           title: product.metaTitle || product.name,
           description: product.metaDescription || product.shortDescription || product.description,
