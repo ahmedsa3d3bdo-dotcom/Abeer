@@ -87,6 +87,44 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         ? [{ id: "order-discount", code: null, amount: totals.discount }]
         : [];
 
+    const promotionNames = discountLines
+      .filter((d: any) => Number(d?.amount ?? 0) === 0)
+      .filter((d: any) => {
+        if (String(d?.type || "") === "free_shipping") return false;
+        const md: any = d?.metadata || null;
+        return (md?.kind === "offer" && md?.offerKind === "standard") || (md?.kind === "deal" && (md?.offerKind === "bxgy_generic" || md?.offerKind === "bxgy_bundle"));
+      })
+      .map((d: any) => d?.name || d?.discountName || d?.code || "")
+      .filter(Boolean)
+      .join(" • ");
+
+    const monetaryDiscountLines = discountLines.filter((d: any) => Number(d?.amount ?? 0) > 0);
+
+    const promotionSavings = (() => {
+      if (!Array.isArray(order?.items)) return 0;
+      let sum = 0;
+      for (const it of order.items as any[]) {
+        const qty = Number(it?.quantity || 0);
+        if (!Number.isFinite(qty) || qty <= 0) continue;
+        const unit = Number(it?.price ?? 0);
+        const total = Number(it?.total ?? 0);
+        const isGift = unit === 0 && total === 0;
+        const base = Number(it?.referencePrice ?? 0);
+        if (!Number.isFinite(base) || base <= 0) continue;
+
+        if (isGift) {
+          sum += base * qty;
+          continue;
+        }
+        if (promotionNames && Number.isFinite(unit) && unit > 0 && unit < base) {
+          sum += (base - unit) * qty;
+        }
+      }
+      return Math.max(0, Number(sum.toFixed(2)));
+    })();
+
+    const displaySubtotal = totals.subtotal + (Number.isFinite(promotionSavings) ? promotionSavings : 0);
+
     return (
       <div className="invoice-print-root mx-auto max-w-4xl p-6 print:p-0">
         <div className="rounded-lg border p-6">
@@ -171,9 +209,20 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
           <div className="mt-6 flex flex-col items-end gap-1 text-sm">
             <div className="flex w-full max-w-sm justify-between">
               <span className="text-muted-foreground">Subtotal</span>
-              <span>${totals.subtotal.toFixed(2)}</span>
+              <span>${displaySubtotal.toFixed(2)}</span>
             </div>
-            {discountLines.map((d: any) => (
+            {promotionSavings > 0 ? (
+              <div className="flex w-full max-w-sm justify-between">
+                <span className="text-muted-foreground">Promotion{promotionNames ? ` (${promotionNames})` : ""}</span>
+                <span>-${promotionSavings.toFixed(2)}</span>
+              </div>
+            ) : promotionNames ? (
+              <div className="flex w-full max-w-sm justify-between">
+                <span className="text-muted-foreground">Promotion ({promotionNames})</span>
+                <span>—</span>
+              </div>
+            ) : null}
+            {monetaryDiscountLines.map((d: any) => (
               <div key={String(d.id)} className="flex w-full max-w-sm justify-between">
                 <span className="text-muted-foreground">
                   Discount
@@ -248,6 +297,48 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
     : Number(order?.discount || 0) > 0
       ? [{ id: "order-discount", code: null, amount: Number(order?.discount || 0) }]
       : [];
+
+  const promotionNames = discountLines
+    .filter((d: any) => Number(d?.amount ?? 0) === 0)
+    .filter((d: any) => {
+      if (String(d?.type || "") === "free_shipping") return false;
+      const md: any = d?.metadata || null;
+      return (
+        (md?.kind === "offer" && md?.offerKind === "standard") ||
+        (md?.kind === "deal" && (md?.offerKind === "bxgy_generic" || md?.offerKind === "bxgy_bundle"))
+      );
+    })
+    .map((d: any) => d?.name || d?.discountName || d?.code || "")
+    .filter(Boolean)
+    .join(" • ");
+
+  const monetaryDiscountLines = discountLines.filter((d: any) => Number(d?.amount ?? 0) > 0);
+
+  const promotionSavings = (() => {
+    if (!Array.isArray(order?.items)) return 0;
+    let sum = 0;
+    for (const it of order.items as any[]) {
+      const qty = Number(it?.quantity || 0);
+      if (!Number.isFinite(qty) || qty <= 0) continue;
+      const unit = Number(it?.price ?? 0);
+      const total = Number(it?.total ?? 0);
+      const isGift = unit === 0 && total === 0;
+      const base = Number(it?.referencePrice ?? 0);
+      if (!Number.isFinite(base) || base <= 0) continue;
+
+      if (isGift) {
+        sum += base * qty;
+        continue;
+      }
+
+      if (Number.isFinite(unit) && unit > 0 && unit < base) {
+        sum += (base - unit) * qty;
+      }
+    }
+    return Math.max(0, Number(sum.toFixed(2)));
+  })();
+
+  const displaySubtotal = Number(order.subtotal || 0) + (Number.isFinite(promotionSavings) ? promotionSavings : 0);
 
   return (
     <div className="space-y-6">
@@ -356,9 +447,20 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Subtotal</span>
-                <span>${Number(order.subtotal || 0).toFixed(2)}</span>
+                <span>${displaySubtotal.toFixed(2)}</span>
               </div>
-              {discountLines.map((d: any) => (
+              {promotionSavings > 0 ? (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Promotion{promotionNames ? ` (${promotionNames})` : ""}</span>
+                  <span>-${promotionSavings.toFixed(2)}</span>
+                </div>
+              ) : promotionNames ? (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Promotion ({promotionNames})</span>
+                  <span>—</span>
+                </div>
+              ) : null}
+              {monetaryDiscountLines.map((d: any) => (
                 <div key={String(d.id)} className="flex justify-between">
                   <span className="text-muted-foreground">
                     Discount

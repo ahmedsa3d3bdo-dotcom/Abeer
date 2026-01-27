@@ -112,6 +112,11 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
     () =>
       discountLines
         .filter((d: any) => Number(d?.amount ?? 0) === 0)
+        .filter((d: any) => {
+          if (String(d?.type || "") === "free_shipping") return false;
+          const md: any = d?.metadata || null;
+          return md?.kind === "offer" && md?.offerKind === "standard";
+        })
         .map((d: any) => d?.name || d?.discountName || d?.code || "")
         .filter(Boolean)
         .join(" • "),
@@ -133,7 +138,36 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
     }, 0);
   }, [order]);
 
-  const displaySubtotal = useMemo(() => totals.subtotal + (Number.isFinite(giftValue) ? giftValue : 0), [totals.subtotal, giftValue]);
+  const offerSavings = useMemo(() => {
+    if (!order?.items) return 0;
+    let sum = 0;
+    for (const it of order.items as any[]) {
+      const qty = Number(it.quantity || 0);
+      if (!Number.isFinite(qty) || qty <= 0) continue;
+      const unit = Number(it.price ?? 0);
+      const total = Number(it.total ?? 0);
+      const isGift = unit === 0 && total === 0;
+      if (isGift) continue;
+
+      const base = Number(it.referencePrice ?? 0);
+      if (!Number.isFinite(base) || base <= 0) continue;
+
+      if (Number.isFinite(unit) && unit > 0 && unit < base) {
+        sum += (base - unit) * qty;
+      }
+    }
+    return Math.max(0, Number(sum.toFixed(2)));
+  }, [order]);
+
+  const promotionSavings = useMemo(() => {
+    const v = Number(giftValue || 0) + (promotionNames ? Number(offerSavings || 0) : 0);
+    return Math.max(0, Number(v.toFixed(2)));
+  }, [giftValue, offerSavings, promotionNames]);
+
+  const displaySubtotal = useMemo(
+    () => totals.subtotal + (Number.isFinite(promotionSavings) ? promotionSavings : 0),
+    [totals.subtotal, promotionSavings],
+  );
 
   function InvoiceDocument() {
     return (
@@ -208,6 +242,14 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                 const isGift = Number(it.price ?? 0) === 0 && Number(it.total ?? 0) === 0;
                 const compareAt = Number(it.compareAtPrice ?? 0);
                 const hasCompareAt = Number.isFinite(compareAt) && compareAt > 0 && compareAt > Number(it.price ?? 0);
+                const base = Number(it.referencePrice ?? 0);
+                const hasOffer =
+                  !isGift &&
+                  Boolean(promotionNames) &&
+                  Number.isFinite(base) &&
+                  base > 0 &&
+                  Number(it.price ?? 0) > 0 &&
+                  Number(it.price ?? 0) < base;
                 return (
                   <div key={it.id} className="grid grid-cols-12 gap-2 p-2 text-sm">
                     <div className="col-span-5">
@@ -216,7 +258,7 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                       {it.variant && <div className="text-xs text-muted-foreground">{it.variant}</div>}
                       {it.sku && <div className="text-xs text-muted-foreground">SKU: {it.sku}</div>}
                     </div>
-                    <div className="col-span-2 truncate">{isGift ? (promotionNames || "—") : ""}</div>
+                    <div className="col-span-2 truncate">{isGift || hasOffer ? (promotionNames || "—") : ""}</div>
                     <div className="col-span-2 text-right">{it.quantity}</div>
                     <div className="col-span-1 text-right">
                       {isGift ? (
@@ -254,16 +296,16 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
               <span className="text-muted-foreground">Subtotal</span>
               <span>${displaySubtotal.toFixed(2)}</span>
             </div>
-            {promotionNames && giftValue <= 0 ? (
+            {promotionNames && promotionSavings <= 0 ? (
               <div className="flex w-full max-w-sm justify-between">
                 <span className="text-muted-foreground">Promotion ({promotionNames})</span>
                 <span>—</span>
               </div>
             ) : null}
-            {giftValue > 0 ? (
+            {promotionSavings > 0 ? (
               <div className="flex w-full max-w-sm justify-between">
                 <span className="text-muted-foreground">Discount{promotionNames ? ` (${promotionNames})` : ""}</span>
-                <span>-${giftValue.toFixed(2)}</span>
+                <span>-${promotionSavings.toFixed(2)}</span>
               </div>
             ) : null}
             {monetaryDiscountLines.map((d: any) => (

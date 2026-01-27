@@ -123,6 +123,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
             discountName: schema.discounts.name,
             discountType: schema.discounts.type,
             discountValue: schema.discounts.value,
+            discountMetadata: schema.discounts.metadata,
           })
           .from(schema.orderDiscounts)
           .leftJoin(schema.discounts, eq(schema.discounts.id, schema.orderDiscounts.discountId))
@@ -136,6 +137,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
           name: r.discountName,
           type: r.discountType,
           value: r.discountValue != null ? parseFloat(r.discountValue as any) : null,
+          metadata: r.discountMetadata ?? null,
         }));
       })(),
       items: items.map((it) => ({

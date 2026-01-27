@@ -3,7 +3,7 @@ import { z } from "zod";
 import { discountsService } from "../services/discounts.service";
 import { db } from "@/shared/db";
 import * as schema from "@/shared/db/schema";
-import { desc, eq, sql } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import { settingsRepository } from "../repositories/settings.repository";
 import { handleRouteError, successResponse } from "../utils/response";
 import { requirePermission } from "../utils/rbac";
@@ -188,13 +188,83 @@ export class DiscountsController {
           createdAt: schema.orderDiscounts.createdAt,
           totalAmount: schema.orders.totalAmount,
           currency: schema.orders.currency,
+          discountType: schema.discounts.type,
+          discountMetadata: schema.discounts.metadata,
         })
         .from(schema.orderDiscounts)
         .innerJoin(schema.orders, eq(schema.orderDiscounts.orderId, schema.orders.id))
+        .leftJoin(schema.discounts, eq(schema.discounts.id, schema.orderDiscounts.discountId))
         .where(eq(schema.orderDiscounts.discountId, id as any))
         .orderBy(desc(schema.orderDiscounts.createdAt))
         .limit(limit)
         .offset(offset);
+
+      const needsComputed = items.some((it: any) => {
+        if (Number(it?.amount ?? 0) !== 0) return false;
+        if (String(it?.discountType || "") === "free_shipping") return false;
+        const md: any = it?.discountMetadata || null;
+        const isOffer = md?.kind === "offer" && md?.offerKind === "standard";
+        const isDeal = md?.kind === "deal" && (md?.offerKind === "bxgy_generic" || md?.offerKind === "bxgy_bundle");
+        return isOffer || isDeal;
+      });
+
+      let computedByOrderId = new Map<string, { offerSavings: number; giftSavings: number }>();
+      if (needsComputed) {
+        const orderIds = Array.from(new Set(items.map((x: any) => String(x.orderId)).filter(Boolean)));
+        if (orderIds.length) {
+          const rows = await db
+            .select({
+              orderId: schema.orderItems.orderId,
+              quantity: schema.orderItems.quantity,
+              unitPrice: schema.orderItems.unitPrice,
+              totalPrice: schema.orderItems.totalPrice,
+              baseProductPrice: schema.products.price,
+              baseVariantPrice: schema.productVariants.price,
+            })
+            .from(schema.orderItems)
+            .leftJoin(schema.products, eq(schema.products.id, schema.orderItems.productId))
+            .leftJoin(schema.productVariants, eq(schema.productVariants.id, schema.orderItems.variantId))
+            .where(inArray(schema.orderItems.orderId, orderIds as any));
+
+          for (const r of rows as any[]) {
+            const oid = String(r.orderId);
+            const qty = Number(r.quantity || 0);
+            if (!Number.isFinite(qty) || qty <= 0) continue;
+
+            const unit = parseFloat(String(r.unitPrice ?? 0));
+            const total = parseFloat(String(r.totalPrice ?? 0));
+            const isGift = unit === 0 && total === 0;
+
+            const base = parseFloat(String(r.baseVariantPrice ?? r.baseProductPrice ?? 0));
+            if (!Number.isFinite(base) || base <= 0) continue;
+
+            const cur = computedByOrderId.get(oid) || { offerSavings: 0, giftSavings: 0 };
+
+            if (isGift) {
+              cur.giftSavings += base * qty;
+            } else if (Number.isFinite(unit) && unit > 0 && unit < base) {
+              cur.offerSavings += (base - unit) * qty;
+            }
+
+            computedByOrderId.set(oid, cur);
+          }
+        }
+      }
+
+      const normalizedItems = items.map((it: any) => {
+        const rawAmount = Number(it?.amount ?? 0);
+        if (rawAmount !== 0) return it;
+        if (String(it?.discountType || "") === "free_shipping") return it;
+        const md: any = it?.discountMetadata || null;
+        const isOffer = md?.kind === "offer" && md?.offerKind === "standard";
+        const isDeal = md?.kind === "deal" && (md?.offerKind === "bxgy_generic" || md?.offerKind === "bxgy_bundle");
+        if (!isOffer && !isDeal) return it;
+
+        const agg = computedByOrderId.get(String(it.orderId)) || { offerSavings: 0, giftSavings: 0 };
+        const computed = isOffer ? agg.offerSavings : agg.giftSavings;
+        const nextAmount = Math.max(0, Number(Number(computed || 0).toFixed(2)));
+        return { ...it, amount: nextAmount };
+      });
 
       const [{ count }] = await db
         .select({ count: sql<number>`count(*)` })
@@ -202,7 +272,7 @@ export class DiscountsController {
         .where(eq(schema.orderDiscounts.discountId, id as any));
 
       return successResponse({
-        items,
+        items: normalizedItems,
         total: Number(count || 0),
         page,
         limit,

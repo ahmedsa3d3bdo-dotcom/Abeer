@@ -141,6 +141,7 @@ export class OrdersRepository {
         discountName: schema.discounts.name,
         discountType: schema.discounts.type,
         discountValue: schema.discounts.value,
+        discountMetadata: schema.discounts.metadata,
       })
       .from(schema.orderDiscounts)
       .leftJoin(schema.discounts, eq(schema.discounts.id, schema.orderDiscounts.discountId))

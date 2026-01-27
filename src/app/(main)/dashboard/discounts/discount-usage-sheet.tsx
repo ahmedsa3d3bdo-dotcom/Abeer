@@ -146,7 +146,9 @@ export function DiscountUsageSheet({ open, onOpenChange, discount }: DiscountUsa
                   <div className="col-span-3 font-medium">#{u.orderNumber || "—"}</div>
                   <div className="col-span-4 truncate">{u.customerEmail || "—"}</div>
                   <div className="col-span-2 text-right">
-                    -{formatCurrency(Number(u.amount ?? 0), { currency: u.currency || "CAD", locale: "en-CA" })}
+                    {Number(u.amount ?? 0) === 0
+                      ? "FREE"
+                      : `-${formatCurrency(Number(u.amount ?? 0), { currency: u.currency || "CAD", locale: "en-CA" })}`}
                   </div>
                   <div className="col-span-3 text-right text-muted-foreground">
                     <LocalDateTime value={u.createdAt} />

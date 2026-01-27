@@ -165,11 +165,28 @@ export default function OrdersPage() {
         ? [{ id: "order-discount", code: d?.order?.appliedDiscountCode || null, amount: d?.order?.discountAmount }]
         : [];
 
-    const promotionNames = allDiscountLines
+    const offerPromotionNames = allDiscountLines
       .filter((od) => Number(od?.amount ?? 0) === 0)
+      .filter((od) => {
+        if (String(od?.discountType || "") === "free_shipping") return false;
+        const md: any = (od as any)?.discountMetadata || null;
+        return md?.kind === "offer" && md?.offerKind === "standard";
+      })
       .map((od) => od?.discountName || od?.code || "")
       .filter(Boolean)
       .join(" • ");
+
+    const dealPromotionNames = allDiscountLines
+      .filter((od) => Number(od?.amount ?? 0) === 0)
+      .filter((od) => {
+        const md: any = (od as any)?.discountMetadata || null;
+        return md?.kind === "deal" && (md?.offerKind === "bxgy_generic" || md?.offerKind === "bxgy_bundle");
+      })
+      .map((od) => od?.discountName || od?.code || "")
+      .filter(Boolean)
+      .join(" • ");
+
+    const promotionNames = [offerPromotionNames, dealPromotionNames].filter(Boolean).join(" • ");
 
     const discountLines = allDiscountLines.filter((od) => Number(od?.amount ?? 0) > 0);
 
@@ -183,7 +200,23 @@ export default function OrdersPage() {
       return sum + ref * qty;
     }, 0);
 
-    const displaySubtotal = totals.subtotal + (Number.isFinite(giftValue) ? giftValue : 0);
+    const offerSavings = (d?.items || []).reduce((sum: number, it: any) => {
+      if (!offerPromotionNames) return sum;
+      const isGift = Number(it.unitPrice ?? 0) === 0 && Number(it.totalPrice ?? 0) === 0;
+      if (isGift) return sum;
+      const qty = Number(it.quantity || 0);
+      if (!Number.isFinite(qty) || qty <= 0) return sum;
+      const base = parseFloat(String(it.variantPrice ?? it.productPrice ?? 0));
+      const unit = Number(it.unitPrice ?? 0);
+      if (!Number.isFinite(base) || base <= 0) return sum;
+      if (!Number.isFinite(unit) || unit <= 0) return sum;
+      if (unit >= base) return sum;
+      return sum + (base - unit) * qty;
+    }, 0);
+
+    const promotionSavings = Number(giftValue || 0) + Number(offerSavings || 0);
+
+    const displaySubtotal = totals.subtotal + (Number.isFinite(promotionSavings) ? promotionSavings : 0);
 
     const billedTo = d?.shippingAddress
       ? {
@@ -269,6 +302,14 @@ export default function OrdersPage() {
                 const isGift = Number(it.unitPrice ?? 0) === 0 && Number(it.totalPrice ?? 0) === 0;
                 const compareAt = Number(it.variantCompareAtPrice ?? it.productCompareAtPrice ?? 0);
                 const hasCompareAt = Number.isFinite(compareAt) && compareAt > 0 && compareAt > Number(it.unitPrice ?? 0);
+                const base = parseFloat(String(it.variantPrice ?? it.productPrice ?? 0));
+                const hasOffer =
+                  !isGift &&
+                  Boolean(offerPromotionNames) &&
+                  Number.isFinite(base) &&
+                  base > 0 &&
+                  Number(it.unitPrice ?? 0) > 0 &&
+                  Number(it.unitPrice ?? 0) < base;
                 return (
               <div key={it.id} className="grid grid-cols-12 gap-2 p-2 text-sm">
                 <div className="col-span-5">
@@ -277,7 +318,7 @@ export default function OrdersPage() {
                   {it.variantName && <div className="text-xs text-muted-foreground">{it.variantName}</div>}
                   {it.sku && <div className="text-xs text-muted-foreground">SKU: {it.sku}</div>}
                 </div>
-                <div className="col-span-2 truncate">{isGift ? (promotionNames || "—") : ""}</div>
+                <div className="col-span-2 truncate">{isGift || hasOffer ? (promotionNames || "—") : ""}</div>
                 <div className="col-span-2 text-right">{it.quantity}</div>
                 <div className="col-span-1 text-right">
                   {isGift ? (
@@ -318,16 +359,16 @@ export default function OrdersPage() {
               <span className="text-muted-foreground">Subtotal</span>
               <span>{formatCurrency(displaySubtotal, { currency, locale })}</span>
             </div>
-            {promotionNames && giftValue <= 0 ? (
+            {promotionNames && promotionSavings <= 0 ? (
               <div className="flex w-full max-w-sm justify-between">
                 <span className="text-muted-foreground">Promotion ({promotionNames})</span>
                 <span>—</span>
               </div>
             ) : null}
-            {giftValue > 0 ? (
+            {promotionSavings > 0 ? (
               <div className="flex w-full max-w-sm justify-between">
                 <span className="text-muted-foreground">Discount{promotionNames ? ` (${promotionNames})` : ""}</span>
-                <span>-{formatCurrency(giftValue, { currency, locale })}</span>
+                <span>-{formatCurrency(promotionSavings, { currency, locale })}</span>
               </div>
             ) : null}
             <div className="flex w-full max-w-sm justify-between">
