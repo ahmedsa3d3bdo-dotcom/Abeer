@@ -159,14 +159,36 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
     return Math.max(0, Number(sum.toFixed(2)));
   }, [order]);
 
+  const saleSavings = useMemo(() => {
+    if (!order?.items) return 0;
+    let sum = 0;
+    for (const it of order.items as any[]) {
+      const qty = Number(it.quantity || 0);
+      if (!Number.isFinite(qty) || qty <= 0) continue;
+      const unit = Number(it.price ?? 0);
+      const total = Number(it.total ?? 0);
+      const isGift = unit === 0 && total === 0;
+      if (isGift) continue;
+      const base = Number(it.referencePrice ?? 0);
+      const compareAt = Number(it.compareAtPrice ?? 0);
+      if (!Number.isFinite(base) || base <= 0) continue;
+      if (!Number.isFinite(compareAt) || compareAt <= base) continue;
+      sum += (compareAt - base) * qty;
+    }
+    return Math.max(0, Number(sum.toFixed(2)));
+  }, [order]);
+
   const promotionSavings = useMemo(() => {
     const v = Number(giftValue || 0) + (promotionNames ? Number(offerSavings || 0) : 0);
     return Math.max(0, Number(v.toFixed(2)));
   }, [giftValue, offerSavings, promotionNames]);
 
   const displaySubtotal = useMemo(
-    () => totals.subtotal + (Number.isFinite(promotionSavings) ? promotionSavings : 0),
-    [totals.subtotal, promotionSavings],
+    () =>
+      totals.subtotal +
+      (Number.isFinite(promotionSavings) ? promotionSavings : 0) +
+      (Number.isFinite(saleSavings) ? saleSavings : 0),
+    [totals.subtotal, promotionSavings, saleSavings],
   );
 
   function InvoiceDocument() {
@@ -296,6 +318,12 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
               <span className="text-muted-foreground">Subtotal</span>
               <span>${displaySubtotal.toFixed(2)}</span>
             </div>
+            {saleSavings > 0 ? (
+              <div className="flex w-full max-w-sm justify-between">
+                <span className="text-muted-foreground">Sale (Compare at)</span>
+                <span>-${saleSavings.toFixed(2)}</span>
+              </div>
+            ) : null}
             {promotionNames && promotionSavings <= 0 ? (
               <div className="flex w-full max-w-sm justify-between">
                 <span className="text-muted-foreground">Promotion ({promotionNames})</span>

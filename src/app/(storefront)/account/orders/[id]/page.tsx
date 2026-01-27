@@ -123,7 +123,29 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       return Math.max(0, Number(sum.toFixed(2)));
     })();
 
-    const displaySubtotal = totals.subtotal + (Number.isFinite(promotionSavings) ? promotionSavings : 0);
+    const saleSavings = (() => {
+      if (!Array.isArray(order?.items)) return 0;
+      let sum = 0;
+      for (const it of order.items as any[]) {
+        const qty = Number(it?.quantity || 0);
+        if (!Number.isFinite(qty) || qty <= 0) continue;
+        const unit = Number(it?.price ?? 0);
+        const total = Number(it?.total ?? 0);
+        const isGift = unit === 0 && total === 0;
+        if (isGift) continue;
+        const base = Number(it?.referencePrice ?? 0);
+        const compareAt = Number(it?.compareAtPrice ?? 0);
+        if (!Number.isFinite(base) || base <= 0) continue;
+        if (!Number.isFinite(compareAt) || compareAt <= base) continue;
+        sum += (compareAt - base) * qty;
+      }
+      return Math.max(0, Number(sum.toFixed(2)));
+    })();
+
+    const displaySubtotal =
+      totals.subtotal +
+      (Number.isFinite(promotionSavings) ? promotionSavings : 0) +
+      (Number.isFinite(saleSavings) ? saleSavings : 0);
 
     return (
       <div className="invoice-print-root mx-auto max-w-4xl p-6 print:p-0">
@@ -196,12 +218,50 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                 <div key={it.id} className="grid grid-cols-12 gap-2 p-2 text-sm">
                   <div className="col-span-7">
                     <div className="font-medium">{it.name}</div>
+                    {Number(it.price ?? 0) === 0 && Number(it.total ?? 0) === 0 ? (
+                      <div className="text-xs font-medium text-green-700 dark:text-green-300">Free gift</div>
+                    ) : null}
                     {it.variant && <div className="text-xs text-muted-foreground">{it.variant}</div>}
                     {it.sku && <div className="text-xs text-muted-foreground">SKU: {it.sku}</div>}
                   </div>
                   <div className="col-span-2 text-right">{it.quantity}</div>
-                  <div className="col-span-1 text-right">${Number(it.price).toFixed(2)}</div>
-                  <div className="col-span-2 text-right">${Number(it.total).toFixed(2)}</div>
+                  <div className="col-span-1 text-right">
+                    {(() => {
+                      const unit = Number(it.price ?? 0);
+                      const total = Number(it.total ?? 0);
+                      const isGift = unit === 0 && total === 0;
+                      if (isGift) return "FREE";
+                      const compareAt = Number(it.compareAtPrice ?? 0);
+                      const hasCompareAt = Number.isFinite(compareAt) && compareAt > 0 && compareAt > unit;
+                      return (
+                        <div className="flex flex-col items-end leading-tight">
+                          {hasCompareAt ? (
+                            <span className="text-xs text-muted-foreground line-through">${compareAt.toFixed(2)}</span>
+                          ) : null}
+                          <span>${unit.toFixed(2)}</span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                  <div className="col-span-2 text-right">
+                    {(() => {
+                      const unit = Number(it.price ?? 0);
+                      const total = Number(it.total ?? 0);
+                      const qty = Number(it.quantity ?? 0);
+                      const isGift = unit === 0 && total === 0;
+                      if (isGift) return "FREE";
+                      const compareAt = Number(it.compareAtPrice ?? 0);
+                      const hasCompareAt = Number.isFinite(compareAt) && compareAt > 0 && compareAt > unit;
+                      return (
+                        <div className="flex flex-col items-end leading-tight">
+                          {hasCompareAt ? (
+                            <span className="text-xs text-muted-foreground line-through">${(compareAt * qty).toFixed(2)}</span>
+                          ) : null}
+                          <span>${total.toFixed(2)}</span>
+                        </div>
+                      );
+                    })()}
+                  </div>
                 </div>
               ))}
           </div>
@@ -211,6 +271,12 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               <span className="text-muted-foreground">Subtotal</span>
               <span>${displaySubtotal.toFixed(2)}</span>
             </div>
+            {saleSavings > 0 ? (
+              <div className="flex w-full max-w-sm justify-between">
+                <span className="text-muted-foreground">Sale (Compare at)</span>
+                <span>-${saleSavings.toFixed(2)}</span>
+              </div>
+            ) : null}
             {promotionSavings > 0 ? (
               <div className="flex w-full max-w-sm justify-between">
                 <span className="text-muted-foreground">Promotion{promotionNames ? ` (${promotionNames})` : ""}</span>
@@ -338,7 +404,29 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
     return Math.max(0, Number(sum.toFixed(2)));
   })();
 
-  const displaySubtotal = Number(order.subtotal || 0) + (Number.isFinite(promotionSavings) ? promotionSavings : 0);
+  const saleSavings = (() => {
+    if (!Array.isArray(order?.items)) return 0;
+    let sum = 0;
+    for (const it of order.items as any[]) {
+      const qty = Number(it?.quantity || 0);
+      if (!Number.isFinite(qty) || qty <= 0) continue;
+      const unit = Number(it?.price ?? 0);
+      const total = Number(it?.total ?? 0);
+      const isGift = unit === 0 && total === 0;
+      if (isGift) continue;
+      const base = Number(it?.referencePrice ?? 0);
+      const compareAt = Number(it?.compareAtPrice ?? 0);
+      if (!Number.isFinite(base) || base <= 0) continue;
+      if (!Number.isFinite(compareAt) || compareAt <= base) continue;
+      sum += (compareAt - base) * qty;
+    }
+    return Math.max(0, Number(sum.toFixed(2)));
+  })();
+
+  const displaySubtotal =
+    Number(order.subtotal || 0) +
+    (Number.isFinite(promotionSavings) ? promotionSavings : 0) +
+    (Number.isFinite(saleSavings) ? saleSavings : 0);
 
   return (
     <div className="space-y-6">
@@ -407,6 +495,10 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                 {order.items.map((item: any) => (
                   (() => {
                     const isGift = Number(item.price ?? 0) === 0 && Number(item.total ?? 0) === 0;
+                    const unit = Number(item.price ?? 0);
+                    const qty = Number(item.quantity ?? 0);
+                    const compareAt = Number(item.compareAtPrice ?? 0);
+                    const hasCompareAt = Number.isFinite(compareAt) && compareAt > 0 && compareAt > unit;
                     return (
                   <div key={item.id} className="flex gap-4">
                     <Link href={item.productSlug ? `/product/${item.productSlug}` : item.productId ? `/product/${item.productId}` : "#"} className="relative h-20 w-20 rounded bg-muted flex-shrink-0">
@@ -432,13 +524,30 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                         SKU: {item.sku}
                       </p>
                       <p className="text-sm mt-1">
-                        Qty: {item.quantity} × {isGift ? "FREE" : `$${item.price.toFixed(2)}`}
+                        Qty: {item.quantity} ×{" "}
+                        {isGift ? (
+                          "FREE"
+                        ) : (
+                          <span className="inline-flex flex-col items-start leading-tight">
+                            {hasCompareAt ? (
+                              <span className="text-xs text-muted-foreground line-through">${compareAt.toFixed(2)}</span>
+                            ) : null}
+                            <span>${unit.toFixed(2)}</span>
+                          </span>
+                        )}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className={isGift ? "font-semibold text-green-700 dark:text-green-300" : "font-semibold"}>
-                        {isGift ? "FREE" : `$${item.total.toFixed(2)}`}
-                      </p>
+                      {isGift ? (
+                        <p className="font-semibold text-green-700 dark:text-green-300">FREE</p>
+                      ) : (
+                        <div className="flex flex-col items-end leading-tight">
+                          {hasCompareAt ? (
+                            <span className="text-xs text-muted-foreground line-through">${(compareAt * qty).toFixed(2)}</span>
+                          ) : null}
+                          <p className="font-semibold">${Number(item.total ?? 0).toFixed(2)}</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                     );
@@ -449,6 +558,12 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
                 <span className="text-muted-foreground">Subtotal</span>
                 <span>${displaySubtotal.toFixed(2)}</span>
               </div>
+              {saleSavings > 0 ? (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Sale (Compare at)</span>
+                  <span>-${saleSavings.toFixed(2)}</span>
+                </div>
+              ) : null}
               {promotionSavings > 0 ? (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Promotion{promotionNames ? ` (${promotionNames})` : ""}</span>

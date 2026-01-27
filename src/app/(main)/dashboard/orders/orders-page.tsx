@@ -214,9 +214,24 @@ export default function OrdersPage() {
       return sum + (base - unit) * qty;
     }, 0);
 
+    const saleSavings = (d?.items || []).reduce((sum: number, it: any) => {
+      const isGift = Number(it.unitPrice ?? 0) === 0 && Number(it.totalPrice ?? 0) === 0;
+      if (isGift) return sum;
+      const qty = Number(it.quantity || 0);
+      if (!Number.isFinite(qty) || qty <= 0) return sum;
+      const base = parseFloat(String(it.variantPrice ?? it.productPrice ?? 0));
+      if (!Number.isFinite(base) || base <= 0) return sum;
+      const compareAt = Number(it.variantCompareAtPrice ?? it.productCompareAtPrice ?? 0);
+      if (!Number.isFinite(compareAt) || compareAt <= base) return sum;
+      return sum + (compareAt - base) * qty;
+    }, 0);
+
     const promotionSavings = Number(giftValue || 0) + Number(offerSavings || 0);
 
-    const displaySubtotal = totals.subtotal + (Number.isFinite(promotionSavings) ? promotionSavings : 0);
+    const displaySubtotal =
+      totals.subtotal +
+      (Number.isFinite(promotionSavings) ? promotionSavings : 0) +
+      (Number.isFinite(saleSavings) ? saleSavings : 0);
 
     const billedTo = d?.shippingAddress
       ? {
@@ -359,6 +374,12 @@ export default function OrdersPage() {
               <span className="text-muted-foreground">Subtotal</span>
               <span>{formatCurrency(displaySubtotal, { currency, locale })}</span>
             </div>
+            {saleSavings > 0 ? (
+              <div className="flex w-full max-w-sm justify-between">
+                <span className="text-muted-foreground">Sale (Compare at)</span>
+                <span>-{formatCurrency(saleSavings, { currency, locale })}</span>
+              </div>
+            ) : null}
             {promotionNames && promotionSavings <= 0 ? (
               <div className="flex w-full max-w-sm justify-between">
                 <span className="text-muted-foreground">Promotion ({promotionNames})</span>
@@ -539,6 +560,20 @@ export default function OrdersPage() {
   }
 
   function DrawerContent({ d }: { d: any }) {
+    const currency = d?.order?.currency || "CAD";
+    const locale = "en-CA";
+    const saleSavings = (d?.items || []).reduce((sum: number, it: any) => {
+      const isGift = Number(it.unitPrice ?? 0) === 0 && Number(it.totalPrice ?? 0) === 0;
+      if (isGift) return sum;
+      const qty = Number(it.quantity || 0);
+      if (!Number.isFinite(qty) || qty <= 0) return sum;
+      const base = parseFloat(String(it.variantPrice ?? it.productPrice ?? 0));
+      if (!Number.isFinite(base) || base <= 0) return sum;
+      const compareAt = Number(it.variantCompareAtPrice ?? it.productCompareAtPrice ?? 0);
+      if (!Number.isFinite(compareAt) || compareAt <= base) return sum;
+      return sum + (compareAt - base) * qty;
+    }, 0);
+
     return (
       <>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -579,8 +614,11 @@ export default function OrdersPage() {
           <div className="rounded-lg border p-4">
             <div className="text-xs text-muted-foreground">Total</div>
             <div className="font-medium">
-              {formatCurrency(Number(d.order?.totalAmount ?? 0), { currency: d.order?.currency || "CAD", locale: "en-CA" })}
+              {formatCurrency(Number(d.order?.totalAmount ?? 0), { currency, locale })}
             </div>
+            {saleSavings > 0 ? (
+              <div className="text-xs text-muted-foreground mt-0.5">Sale (Compare at): -{formatCurrency(saleSavings, { currency, locale })}</div>
+            ) : null}
           </div>
         </div>
 
