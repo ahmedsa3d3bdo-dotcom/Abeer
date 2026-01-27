@@ -356,10 +356,43 @@ export class DiscountsController {
         .from(schema.discounts)
         .where(sql`${schema.discounts.status} = 'active' AND (${schema.discounts.startsAt} IS NULL OR ${schema.discounts.startsAt} <= ${now}) AND (${schema.discounts.endsAt} IS NULL OR ${schema.discounts.endsAt} >= ${now}) AND ${where ? sql`(${where})` : sql`true`}` as any);
 
-      const [{ totalUsage }] = await db
-        .select({ totalUsage: sql<number>`COALESCE(SUM(${schema.discounts.usageCount}), 0)` })
+      const discountsForMetrics = await db
+        .select({
+          id: schema.discounts.id,
+          type: schema.discounts.type,
+          metadata: schema.discounts.metadata,
+        })
         .from(schema.discounts)
         .where(where as any);
+
+      const discountIds = (discountsForMetrics || []).map((d: any) => d?.id).filter(Boolean);
+
+      const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+      let totalUsage = 0;
+      if (discountIds.length) {
+        const orderUsage = await db
+          .select({ orderId: schema.orderDiscounts.orderId, discountId: schema.orderDiscounts.discountId })
+          .from(schema.orderDiscounts)
+          .where(inArray(schema.orderDiscounts.discountId, discountIds as any));
+
+        const orderItemUsage = await db
+          .select({ orderId: schema.orderItems.orderId, discountId: schema.orderItemDiscounts.discountId })
+          .from(schema.orderItemDiscounts)
+          .innerJoin(schema.orderItems, eq(schema.orderItemDiscounts.orderItemId, schema.orderItems.id))
+          .where(inArray(schema.orderItemDiscounts.discountId, discountIds as any));
+
+        const usageSet = new Set<string>();
+        for (const r of orderUsage as any[]) {
+          if (!r?.orderId || !r?.discountId) continue;
+          usageSet.add(`${String(r.orderId)}:${String(r.discountId)}`);
+        }
+        for (const r of orderItemUsage as any[]) {
+          if (!r?.orderId || !r?.discountId) continue;
+          usageSet.add(`${String(r.orderId)}:${String(r.discountId)}`);
+        }
+        totalUsage = usageSet.size;
+      }
 
       // Sum discount given from order_discounts and order_item_discounts joined to discounts (if discountId present)
       const [{ amountOrders }] = await db
@@ -374,7 +407,6 @@ export class DiscountsController {
         .innerJoin(schema.discounts, sql`${schema.orderItemDiscounts.discountId} = ${schema.discounts.id}`)
         .where(where as any);
 
-      const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
       const [{ amountOrders30d }] = await db
         .select({ amountOrders30d: sql<string>`COALESCE(SUM(${schema.orderDiscounts.amount}), '0')` })
         .from(schema.orderDiscounts)
@@ -387,11 +419,81 @@ export class DiscountsController {
         .innerJoin(schema.discounts, sql`${schema.orderItemDiscounts.discountId} = ${schema.discounts.id}`)
         .where(sql`${schema.orderItemDiscounts.createdAt} >= ${since} AND ${where ? sql`(${where})` : sql`true`}` as any);
 
+      let computedPromotionSavings = 0;
+      let computedPromotionSavings30d = 0;
+      if (discountIds.length) {
+        const promoRows = await db
+          .select({
+            orderId: schema.orderDiscounts.orderId,
+            amount: schema.orderDiscounts.amount,
+            createdAt: schema.orderDiscounts.createdAt,
+            discountType: schema.discounts.type,
+            discountMetadata: schema.discounts.metadata,
+          })
+          .from(schema.orderDiscounts)
+          .innerJoin(schema.discounts, eq(schema.orderDiscounts.discountId, schema.discounts.id))
+          .where(inArray(schema.orderDiscounts.discountId, discountIds as any));
+
+        const promoOnly = (promoRows as any[]).filter((it: any) => {
+          if (Number(it?.amount ?? 0) !== 0) return false;
+          if (String(it?.discountType || "") === "free_shipping") return false;
+          const md: any = it?.discountMetadata || null;
+          const isOffer = md?.kind === "offer" && md?.offerKind === "standard";
+          const isDeal = md?.kind === "deal" && (md?.offerKind === "bxgy_generic" || md?.offerKind === "bxgy_bundle");
+          return isOffer || isDeal;
+        });
+
+        if (promoOnly.length) {
+          const orderIds = Array.from(new Set(promoOnly.map((x: any) => String(x.orderId)).filter(Boolean)));
+          const itemRows = await db
+            .select({
+              orderId: schema.orderItems.orderId,
+              quantity: schema.orderItems.quantity,
+              unitPrice: schema.orderItems.unitPrice,
+              totalPrice: schema.orderItems.totalPrice,
+              baseProductPrice: schema.products.price,
+              baseVariantPrice: schema.productVariants.price,
+            })
+            .from(schema.orderItems)
+            .leftJoin(schema.products, eq(schema.products.id, schema.orderItems.productId))
+            .leftJoin(schema.productVariants, eq(schema.productVariants.id, schema.orderItems.variantId))
+            .where(inArray(schema.orderItems.orderId, orderIds as any));
+
+          const agg = new Map<string, { offer: number; gift: number }>();
+          for (const r of itemRows as any[]) {
+            const oid = String(r.orderId);
+            const qty = Number(r.quantity || 0);
+            if (!Number.isFinite(qty) || qty <= 0) continue;
+            const unit = parseFloat(String(r.unitPrice ?? 0));
+            const total = parseFloat(String(r.totalPrice ?? 0));
+            const isGift = unit === 0 && total === 0;
+            const base = parseFloat(String(r.baseVariantPrice ?? r.baseProductPrice ?? 0));
+            if (!Number.isFinite(base) || base <= 0) continue;
+            const cur = agg.get(oid) || { offer: 0, gift: 0 };
+            if (isGift) cur.gift += base * qty;
+            else if (Number.isFinite(unit) && unit > 0 && unit < base) cur.offer += (base - unit) * qty;
+            agg.set(oid, cur);
+          }
+
+          for (const it of promoOnly) {
+            const md: any = it?.discountMetadata || null;
+            const isOffer = md?.kind === "offer" && md?.offerKind === "standard";
+            const a = agg.get(String(it.orderId)) || { offer: 0, gift: 0 };
+            const computed = isOffer ? a.offer : a.gift;
+            const val = Math.max(0, Number(Number(computed || 0).toFixed(2)));
+            computedPromotionSavings += val;
+            const createdAt = it?.createdAt ? new Date(it.createdAt) : null;
+            if (createdAt && createdAt >= since) computedPromotionSavings30d += val;
+          }
+        }
+      }
+
       const currencySetting = await settingsRepository.findByKey("currency");
       const currency = currencySetting?.value || "CAD";
 
-      const totalDiscountGiven = Number(amountOrders || 0) + Number(amountOrderItems || 0);
-      const totalDiscountGiven30d = Number(amountOrders30d || 0) + Number(amountOrderItems30d || 0);
+      const totalDiscountGiven = Number(amountOrders || 0) + Number(amountOrderItems || 0) + Number(computedPromotionSavings || 0);
+      const totalDiscountGiven30d =
+        Number(amountOrders30d || 0) + Number(amountOrderItems30d || 0) + Number(computedPromotionSavings30d || 0);
 
       return successResponse({
         totalDiscounts: Number(totalDiscounts || 0),
