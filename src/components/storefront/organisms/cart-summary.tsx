@@ -46,6 +46,38 @@ export function CartSummary({ cart }: CartSummaryProps) {
 
   const hasDiscount = cart.discountAmount > 0;
 
+  const promotionSavings = (cart.items || []).reduce((sum: number, it: any) => {
+    const qty = Number(it.quantity || 0);
+    if (!Number.isFinite(qty) || qty <= 0) return sum;
+    const ref = Number(it.referencePrice ?? it.unitPrice ?? 0);
+    if (!Number.isFinite(ref) || ref <= 0) return sum;
+    const unit = Number(it.unitPrice ?? 0);
+    const total = Number(it.totalPrice ?? 0);
+    const isGift = Boolean(it.isGift) || (unit === 0 && total === 0);
+    if (isGift) return sum + ref * qty;
+    const hasOffer = Boolean(String(it.promotionName || "").trim());
+    if (!hasOffer) return sum;
+    if (!Number.isFinite(unit) || unit <= 0) return sum;
+    if (unit >= ref) return sum;
+    return sum + (ref - unit) * qty;
+  }, 0);
+
+  const saleSavings = (cart.items || []).reduce((sum: number, it: any) => {
+    const qty = Number(it.quantity || 0);
+    if (!Number.isFinite(qty) || qty <= 0) return sum;
+    const unit = Number(it.unitPrice ?? 0);
+    const total = Number(it.totalPrice ?? 0);
+    const isGift = Boolean(it.isGift) || (unit === 0 && total === 0);
+    if (isGift) return sum;
+    const ref = Number(it.referencePrice ?? it.unitPrice ?? 0);
+    const compareAt = Number(it.compareAtPrice ?? 0);
+    if (!Number.isFinite(ref) || ref <= 0) return sum;
+    if (!Number.isFinite(compareAt) || compareAt <= ref) return sum;
+    return sum + (compareAt - ref) * qty;
+  }, 0);
+
+  const displaySubtotal = cart.subtotal + promotionSavings + saleSavings;
+
   return (
     <div className="border rounded-lg p-6 sticky top-4">
       <h2 className="text-lg font-semibold mb-4">Order Summary</h2>
@@ -116,8 +148,22 @@ export function CartSummary({ cart }: CartSummaryProps) {
       <div className="space-y-3 text-sm">
         <div className="flex justify-between">
           <span className="text-muted-foreground">Subtotal</span>
-          <span>${cart.subtotal.toFixed(2)}</span>
+          <span>${displaySubtotal.toFixed(2)}</span>
         </div>
+
+        {saleSavings > 0 ? (
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Sale savings</span>
+            <span>-${saleSavings.toFixed(2)}</span>
+          </div>
+        ) : null}
+
+        {promotionSavings > 0 ? (
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Promotion savings</span>
+            <span>-${promotionSavings.toFixed(2)}</span>
+          </div>
+        ) : null}
 
         {hasDiscount && (
           <div className="flex justify-between text-green-600">

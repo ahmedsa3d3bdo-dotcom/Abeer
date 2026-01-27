@@ -31,7 +31,39 @@ export function OrderReview({
 
   const safeShipPrice = Number(shippingMethod?.price ?? 0);
 
-  const computedTotal = cart.subtotal + cart.taxAmount + (shippingReady ? safeShipPrice : 0) - cart.discountAmount;
+  const promotionSavings = (cart.items || []).reduce((sum: number, it: any) => {
+    const qty = Number(it.quantity || 0);
+    if (!Number.isFinite(qty) || qty <= 0) return sum;
+    const ref = Number(it.referencePrice ?? it.unitPrice ?? 0);
+    if (!Number.isFinite(ref) || ref <= 0) return sum;
+    const unit = Number(it.unitPrice ?? 0);
+    const total = Number(it.totalPrice ?? 0);
+    const isGift = Boolean((it as any).isGift) || (unit === 0 && total === 0);
+    if (isGift) return sum + ref * qty;
+    const hasOffer = Boolean(String((it as any).promotionName || "").trim());
+    if (!hasOffer) return sum;
+    if (!Number.isFinite(unit) || unit <= 0) return sum;
+    if (unit >= ref) return sum;
+    return sum + (ref - unit) * qty;
+  }, 0);
+
+  const saleSavings = (cart.items || []).reduce((sum: number, it: any) => {
+    const qty = Number(it.quantity || 0);
+    if (!Number.isFinite(qty) || qty <= 0) return sum;
+    const unit = Number(it.unitPrice ?? 0);
+    const total = Number(it.totalPrice ?? 0);
+    const isGift = Boolean((it as any).isGift) || (unit === 0 && total === 0);
+    if (isGift) return sum;
+    const ref = Number(it.referencePrice ?? it.unitPrice ?? 0);
+    const compareAt = Number((it as any).compareAtPrice ?? 0);
+    if (!Number.isFinite(ref) || ref <= 0) return sum;
+    if (!Number.isFinite(compareAt) || compareAt <= ref) return sum;
+    return sum + (compareAt - ref) * qty;
+  }, 0);
+
+  const displaySubtotal = cart.subtotal + promotionSavings + saleSavings;
+
+  const computedTotal = shippingReady ? cart.subtotal + cart.taxAmount + safeShipPrice - cart.discountAmount : cart.totalAmount;
 
   const canPlaceOrder = addressReady && shippingReady && paymentReady && !isPlacingOrder;
 
@@ -98,8 +130,13 @@ export function OrderReview({
           {cart.items.map((item) => (
             (() => {
               const isGift = Boolean((item as any).isGift) || (Number(item.unitPrice ?? 0) === 0 && Number(item.totalPrice ?? 0) === 0);
+              const referencePrice = Number((item as any).referencePrice ?? item.unitPrice ?? 0);
               const compareAt = Number((item as any).compareAtPrice ?? 0);
-              const hasCompareAt = !isGift && Number.isFinite(compareAt) && compareAt > 0 && compareAt > Number(item.unitPrice ?? 0);
+              const unit = Number(item.unitPrice ?? 0);
+              const hasSaleCompareAt =
+                !isGift && Number.isFinite(compareAt) && compareAt > 0 && Number.isFinite(referencePrice) && compareAt > referencePrice;
+              const hasPromotionPrice =
+                !isGift && Number.isFinite(referencePrice) && referencePrice > 0 && Number.isFinite(unit) && unit > 0 && unit < referencePrice;
               const promotionName = !isGift ? String((item as any).promotionName || "") : "";
               return (
             <div key={item.id} className="flex gap-4">
@@ -126,7 +163,12 @@ export function OrderReview({
                 <p className="text-xs text-muted-foreground">Qty: {item.quantity}</p>
               </div>
               <div className={isGift ? "text-right font-semibold text-sm text-green-700 dark:text-green-300" : "text-right font-semibold text-sm"}>
-                {hasCompareAt ? <div className="text-xs text-muted-foreground line-through">${(compareAt * Number(item.quantity ?? 0)).toFixed(2)}</div> : null}
+                {hasSaleCompareAt ? (
+                  <div className="text-xs text-muted-foreground line-through">${(compareAt * Number(item.quantity ?? 0)).toFixed(2)}</div>
+                ) : null}
+                {hasPromotionPrice ? (
+                  <div className="text-xs text-muted-foreground line-through">${(referencePrice * Number(item.quantity ?? 0)).toFixed(2)}</div>
+                ) : null}
                 <div>{isGift ? "FREE" : `$${item.totalPrice.toFixed(2)}`}</div>
               </div>
             </div>
@@ -141,8 +183,20 @@ export function OrderReview({
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
             <span className="text-muted-foreground">Subtotal</span>
-            <span>${cart.subtotal.toFixed(2)}</span>
+            <span>${displaySubtotal.toFixed(2)}</span>
           </div>
+          {saleSavings > 0 ? (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Sale savings</span>
+              <span>-${saleSavings.toFixed(2)}</span>
+            </div>
+          ) : null}
+          {promotionSavings > 0 ? (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Promotion savings</span>
+              <span>-${promotionSavings.toFixed(2)}</span>
+            </div>
+          ) : null}
           {(cart.appliedDiscounts || []).some((d: any) => Number(d?.amount ?? 0) === 0) ? (
             <div className="flex justify-between">
               <span className="text-muted-foreground">Promotion</span>

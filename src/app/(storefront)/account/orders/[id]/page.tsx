@@ -273,7 +273,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             </div>
             {saleSavings > 0 ? (
               <div className="flex w-full max-w-sm justify-between">
-                <span className="text-muted-foreground">Sale (Compare at)</span>
+                <span className="text-muted-foreground">Sale savings</span>
                 <span>-${saleSavings.toFixed(2)}</span>
               </div>
             ) : null}
@@ -560,7 +560,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               </div>
               {saleSavings > 0 ? (
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Sale (Compare at)</span>
+                  <span className="text-muted-foreground">Sale savings</span>
                   <span>-${saleSavings.toFixed(2)}</span>
                 </div>
               ) : null}

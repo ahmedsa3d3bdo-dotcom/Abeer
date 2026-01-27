@@ -99,6 +99,7 @@ export interface CartItem {
   variantName?: string;
   sku: string;
   quantity: number;
+  referencePrice?: number;
   unitPrice: number;
   totalPrice: number;
   compareAtPrice?: number;

@@ -376,7 +376,7 @@ export default function OrdersPage() {
             </div>
             {saleSavings > 0 ? (
               <div className="flex w-full max-w-sm justify-between">
-                <span className="text-muted-foreground">Sale (Compare at)</span>
+                <span className="text-muted-foreground">Sale savings</span>
                 <span>-{formatCurrency(saleSavings, { currency, locale })}</span>
               </div>
             ) : null}
@@ -617,7 +617,7 @@ export default function OrdersPage() {
               {formatCurrency(Number(d.order?.totalAmount ?? 0), { currency, locale })}
             </div>
             {saleSavings > 0 ? (
-              <div className="text-xs text-muted-foreground mt-0.5">Sale (Compare at): -{formatCurrency(saleSavings, { currency, locale })}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">Sale savings: -{formatCurrency(saleSavings, { currency, locale })}</div>
             ) : null}
           </div>
         </div>

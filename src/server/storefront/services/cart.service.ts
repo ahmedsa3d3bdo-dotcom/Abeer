@@ -177,6 +177,7 @@ export class StorefrontCartService {
         let image: string | null = null;
         let productSlug = item.productSlug;
         let compareAtPrice: number | undefined = undefined;
+        let referencePrice: number | undefined = undefined;
         let promotionName: string | undefined = undefined;
 
         try {
@@ -192,10 +193,30 @@ export class StorefrontCartService {
               baseUnit = parseFloat(String((product as any)?.price ?? 0));
             }
 
-            const unit = parseFloat(String(item.unitPrice));
-            if (Number.isFinite(baseUnit) && baseUnit > 0 && Number.isFinite(unit) && unit > 0 && baseUnit > unit) {
-              compareAtPrice = Number(baseUnit.toFixed(2));
+            if (Number.isFinite(baseUnit) && baseUnit > 0) {
+              referencePrice = Number(baseUnit.toFixed(2));
             }
+
+            // Real compare-at price from catalog (variant/product compareAtPrice)
+            let rawCompareAt = 0;
+            if (item.variantId) {
+              const v = product?.variants?.find((x: any) => x.id === item.variantId);
+              rawCompareAt = parseFloat(String((v as any)?.compareAtPrice ?? 0));
+            }
+            if (!Number.isFinite(rawCompareAt) || rawCompareAt <= 0) {
+              rawCompareAt = parseFloat(String((product as any)?.compareAtPrice ?? 0));
+            }
+            if (
+              Number.isFinite(rawCompareAt) &&
+              rawCompareAt > 0 &&
+              Number.isFinite(baseUnit) &&
+              baseUnit > 0 &&
+              rawCompareAt > baseUnit
+            ) {
+              compareAtPrice = Number(rawCompareAt.toFixed(2));
+            }
+
+            const unit = parseFloat(String(item.unitPrice));
 
             if (offers.length && Number.isFinite(baseUnit) && baseUnit > 0) {
               const categoryIds = (product?.categories || []).map((c: any) => String(c.id)).filter(Boolean);
@@ -245,6 +266,7 @@ export class StorefrontCartService {
           variantName: item.variantName || undefined,
           sku: item.sku,
           quantity: Number(item.quantity),
+          referencePrice,
           unitPrice: parseFloat(item.unitPrice),
           totalPrice: parseFloat(item.totalPrice),
           compareAtPrice,

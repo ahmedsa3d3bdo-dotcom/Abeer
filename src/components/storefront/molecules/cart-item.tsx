@@ -40,8 +40,13 @@ export function CartItem({ item }: CartItemProps) {
 
   const itemTotal = item.totalPrice;
   const isGift = Boolean((item as any).isGift);
+  const referencePrice = Number((item as any).referencePrice ?? item.unitPrice ?? 0);
   const compareAt = Number((item as any).compareAtPrice ?? 0);
-  const hasCompareAt = !isGift && Number.isFinite(compareAt) && compareAt > 0 && compareAt > Number(item.unitPrice ?? 0);
+  const unit = Number(item.unitPrice ?? 0);
+  const hasSaleCompareAt =
+    !isGift && Number.isFinite(compareAt) && compareAt > 0 && Number.isFinite(referencePrice) && compareAt > referencePrice;
+  const hasPromotionPrice =
+    !isGift && Number.isFinite(referencePrice) && referencePrice > 0 && Number.isFinite(unit) && unit > 0 && unit < referencePrice;
   const promotionName = !isGift ? String((item as any).promotionName || "") : "";
 
   return (
@@ -134,13 +139,21 @@ export function CartItem({ item }: CartItemProps) {
                   </>
                 ) : (
                   <>
-                    {hasCompareAt ? (
-                      <div className="text-xs text-muted-foreground line-through">${(compareAt * Number(item.quantity ?? 0)).toFixed(2)}</div>
+                    {hasSaleCompareAt ? (
+                      <div className="text-xs text-muted-foreground line-through">
+                        ${(compareAt * Number(item.quantity ?? 0)).toFixed(2)}
+                      </div>
+                    ) : null}
+                    {hasPromotionPrice ? (
+                      <div className="text-xs text-muted-foreground line-through">
+                        ${(referencePrice * Number(item.quantity ?? 0)).toFixed(2)}
+                      </div>
                     ) : null}
                     <div className="font-semibold">${itemTotal.toFixed(2)}</div>
                     <div className="text-xs text-muted-foreground mt-1">
-                      {hasCompareAt ? <span className="line-through mr-2">${compareAt.toFixed(2)}</span> : null}
-                      <span>${item.unitPrice.toFixed(2)} each</span>
+                      {hasSaleCompareAt ? <span className="line-through mr-2">${compareAt.toFixed(2)}</span> : null}
+                      {hasPromotionPrice ? <span className="line-through mr-2">${referencePrice.toFixed(2)}</span> : null}
+                      <span>${unit.toFixed(2)} each</span>
                     </div>
                   </>
                 )}
