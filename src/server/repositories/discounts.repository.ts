@@ -29,7 +29,14 @@ export class DiscountsRepository {
       filters.push(sql`(${schema.discounts.name} ILIKE ${like} OR ${schema.discounts.code} ILIKE ${like})`);
     }
     if (params.status) filters.push(eq(schema.discounts.status, params.status));
-    if (params.type) filters.push(eq(schema.discounts.type, params.type));
+    if (params.type && params.kind !== "bxgy_generic" && params.kind !== "bxgy_bundle") {
+      filters.push(eq(schema.discounts.type, params.type));
+      if (!params.kind) {
+        filters.push(
+          sql`NOT (coalesce(${schema.discounts.metadata} ->> 'kind', '') = 'deal' AND coalesce(${schema.discounts.metadata} ->> 'offerKind', '') IN ('bxgy_generic', 'bxgy_bundle'))`,
+        );
+      }
+    }
     if (params.scope) filters.push(eq(schema.discounts.scope, params.scope));
     if (params.kind) {
       if (params.kind === "coupon") {

@@ -267,6 +267,8 @@ export default function OrdersPage() {
             {(d?.items || []).map((it: any) => (
               (() => {
                 const isGift = Number(it.unitPrice ?? 0) === 0 && Number(it.totalPrice ?? 0) === 0;
+                const compareAt = Number(it.variantCompareAtPrice ?? it.productCompareAtPrice ?? 0);
+                const hasCompareAt = Number.isFinite(compareAt) && compareAt > 0 && compareAt > Number(it.unitPrice ?? 0);
                 return (
               <div key={it.id} className="grid grid-cols-12 gap-2 p-2 text-sm">
                 <div className="col-span-5">
@@ -278,10 +280,32 @@ export default function OrdersPage() {
                 <div className="col-span-2 truncate">{isGift ? (promotionNames || "—") : ""}</div>
                 <div className="col-span-2 text-right">{it.quantity}</div>
                 <div className="col-span-1 text-right">
-                  {isGift ? "FREE" : formatCurrency(Number(it.unitPrice ?? 0), { currency, locale })}
+                  {isGift ? (
+                    "FREE"
+                  ) : (
+                    <div className="flex flex-col items-end leading-tight">
+                      {hasCompareAt ? (
+                        <span className="text-xs text-muted-foreground line-through">
+                          {formatCurrency(compareAt, { currency, locale })}
+                        </span>
+                      ) : null}
+                      <span>{formatCurrency(Number(it.unitPrice ?? 0), { currency, locale })}</span>
+                    </div>
+                  )}
                 </div>
                 <div className="col-span-2 text-right">
-                  {isGift ? "FREE" : formatCurrency(Number(it.totalPrice ?? 0), { currency, locale })}
+                  {isGift ? (
+                    "FREE"
+                  ) : (
+                    <div className="flex flex-col items-end leading-tight">
+                      {hasCompareAt ? (
+                        <span className="text-xs text-muted-foreground line-through">
+                          {formatCurrency(compareAt * Number(it.quantity ?? 0), { currency, locale })}
+                        </span>
+                      ) : null}
+                      <span>{formatCurrency(Number(it.totalPrice ?? 0), { currency, locale })}</span>
+                    </div>
+                  )}
                 </div>
               </div>
                 );
@@ -294,6 +318,12 @@ export default function OrdersPage() {
               <span className="text-muted-foreground">Subtotal</span>
               <span>{formatCurrency(displaySubtotal, { currency, locale })}</span>
             </div>
+            {promotionNames && giftValue <= 0 ? (
+              <div className="flex w-full max-w-sm justify-between">
+                <span className="text-muted-foreground">Promotion ({promotionNames})</span>
+                <span>—</span>
+              </div>
+            ) : null}
             {giftValue > 0 ? (
               <div className="flex w-full max-w-sm justify-between">
                 <span className="text-muted-foreground">Discount{promotionNames ? ` (${promotionNames})` : ""}</span>
@@ -559,14 +589,45 @@ export default function OrdersPage() {
                 </div>
                 <div className="text-right">{it.quantity}</div>
                 <div className="text-right">
-                  {Number(it.unitPrice ?? 0) === 0 && Number(it.totalPrice ?? 0) === 0
-                    ? "FREE"
-                    : formatCurrency(Number(it.unitPrice ?? 0), { currency: d.order?.currency || "CAD", locale: "en-CA" })}
+                  {(() => {
+                    const isGift = Number(it.unitPrice ?? 0) === 0 && Number(it.totalPrice ?? 0) === 0;
+                    if (isGift) return "FREE";
+                    const currency = d.order?.currency || "CAD";
+                    const compareAt = Number(it.variantCompareAtPrice ?? it.productCompareAtPrice ?? 0);
+                    const unit = Number(it.unitPrice ?? 0);
+                    const hasCompareAt = Number.isFinite(compareAt) && compareAt > 0 && compareAt > unit;
+                    return (
+                      <div className="flex flex-col items-end leading-tight">
+                        {hasCompareAt ? (
+                          <span className="text-xs text-muted-foreground line-through">
+                            {formatCurrency(compareAt, { currency, locale: "en-CA" })}
+                          </span>
+                        ) : null}
+                        <span>{formatCurrency(unit, { currency, locale: "en-CA" })}</span>
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div className="text-right">
-                  {Number(it.unitPrice ?? 0) === 0 && Number(it.totalPrice ?? 0) === 0
-                    ? "FREE"
-                    : formatCurrency(Number(it.totalPrice ?? 0), { currency: d.order?.currency || "CAD", locale: "en-CA" })}
+                  {(() => {
+                    const isGift = Number(it.unitPrice ?? 0) === 0 && Number(it.totalPrice ?? 0) === 0;
+                    if (isGift) return "FREE";
+                    const currency = d.order?.currency || "CAD";
+                    const compareAt = Number(it.variantCompareAtPrice ?? it.productCompareAtPrice ?? 0);
+                    const unit = Number(it.unitPrice ?? 0);
+                    const qty = Number(it.quantity ?? 0);
+                    const hasCompareAt = Number.isFinite(compareAt) && compareAt > 0 && compareAt > unit;
+                    return (
+                      <div className="flex flex-col items-end leading-tight">
+                        {hasCompareAt ? (
+                          <span className="text-xs text-muted-foreground line-through">
+                            {formatCurrency(compareAt * qty, { currency, locale: "en-CA" })}
+                          </span>
+                        ) : null}
+                        <span>{formatCurrency(Number(it.totalPrice ?? 0), { currency, locale: "en-CA" })}</span>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             ))}

@@ -45,7 +45,46 @@ function getDiscountKindValue(row: DiscountRow) {
   return "scheduled_offer";
 }
 
-export function getDiscountColumns(actions: { onEdit: (row: DiscountRow) => void; onDelete: (row: DiscountRow) => void }): ColumnDef<DiscountRow>[] {
+function getDisplayTypeValue(row: DiscountRow) {
+  const kind = getDiscountKindValue(row);
+  if (kind === "bxgy_generic" || kind === "bxgy_bundle") return "bxgy";
+  return row.type;
+}
+
+function getDisplayTypeLabel(row: DiscountRow) {
+  const kind = getDiscountKindValue(row);
+  if (kind === "bxgy_generic" || kind === "bxgy_bundle") return "BXGY";
+  return String(row.type || "").replaceAll("_", " ").toUpperCase();
+}
+
+function getDisplayValueLabel(row: DiscountRow) {
+  const kind = getDiscountKindValue(row);
+  const md: any = row?.metadata || null;
+
+  if (kind === "bxgy_generic") {
+    const buy = Number(md?.bxgy?.buyQty ?? 0);
+    const get = Number(md?.bxgy?.getQty ?? 0);
+    if (buy > 0 && get > 0) return `Buy ${buy} Get ${get}`;
+    return "BXGY";
+  }
+
+  if (kind === "bxgy_bundle") {
+    const buyLines = Array.isArray(md?.bxgyBundle?.buy) ? md.bxgyBundle.buy : [];
+    const getLines = Array.isArray(md?.bxgyBundle?.get) ? md.bxgyBundle.get : [];
+    const buyQty = buyLines.reduce((sum: number, l: any) => sum + Number(l?.quantity ?? 0), 0);
+    const getQty = getLines.reduce((sum: number, l: any) => sum + Number(l?.quantity ?? 0), 0);
+    if (buyQty > 0 && getQty > 0) return `Buy ${buyQty} Get ${getQty}`;
+    return "BXGY bundle";
+  }
+
+  return row.type === "percentage" ? `${row.value}%` : `$${row.value}`;
+}
+
+export function getDiscountColumns(actions: {
+  onView: (row: DiscountRow) => void;
+  onEdit: (row: DiscountRow) => void;
+  onDelete: (row: DiscountRow) => void;
+}): ColumnDef<DiscountRow>[] {
   return [
     {
       id: "select",
@@ -87,12 +126,14 @@ export function getDiscountColumns(actions: { onEdit: (row: DiscountRow) => void
     {
       accessorKey: "type",
       header: ({ column }) => <DataTableColumnHeader column={column} title="Type" />,
-      cell: ({ row }) => <UniversalBadge kind="type" value={row.original.type} label={String(row.original.type || "").replaceAll("_", " ").toUpperCase()} />,
+      cell: ({ row }) => (
+        <UniversalBadge kind="type" value={getDisplayTypeValue(row.original)} label={getDisplayTypeLabel(row.original)} />
+      ),
     },
     {
       accessorKey: "value",
       header: ({ column }) => <DataTableColumnHeader column={column} title="Value" />,
-      cell: ({ row }) => <span>{row.original.type === "percentage" ? `${row.original.value}%` : `$${row.original.value}`}</span>,
+      cell: ({ row }) => <span>{getDisplayValueLabel(row.original)}</span>,
     },
     {
       accessorKey: "scope",
@@ -146,6 +187,9 @@ export function getDiscountColumns(actions: { onEdit: (row: DiscountRow) => void
       header: () => <div className="text-right">Actions</div>,
       cell: ({ row }) => (
         <div className="flex justify-end gap-2">
+          <Button variant="outline" size="sm" onClick={() => actions.onView(row.original)}>
+            View
+          </Button>
           <Button variant="outline" size="sm" onClick={() => actions.onEdit(row.original)}>
             <Pencil className="mr-1 h-4 w-4" /> Edit
           </Button>

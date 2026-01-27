@@ -1,9 +1,10 @@
 import { storefrontCartRepository } from "../repositories/cart.repository";
+import type { Cart } from "@/types/storefront";
 import { storefrontProductsRepository } from "../repositories/products.repository";
+import { storefrontOffersService } from "./offers.service";
 import { db } from "@/shared/db";
 import * as schema from "@/shared/db/schema";
 import { and, eq, sql } from "drizzle-orm";
-import type { Cart } from "@/types/storefront";
 
 /**
  * Storefront Cart Service
@@ -162,12 +163,60 @@ export class StorefrontCartService {
    * Format cart data to API response format
    */
   private async formatCartData(cart: any): Promise<Cart> {
+    let offers: any[] = [];
+    try {
+      offers = await storefrontOffersService.listActivePriceOffers();
+    } catch {
+      offers = [];
+    }
+
     const items = await Promise.all(
       cart.items.map(async (item: any) => {
         // Always compute image from product data to avoid stale or generic repository value
         const product = await storefrontProductsRepository.getById(item.productId);
         let image: string | null = null;
         let productSlug = item.productSlug;
+        let compareAtPrice: number | undefined = undefined;
+        let promotionName: string | undefined = undefined;
+
+        try {
+          const isGift = Boolean((item as any).isGift);
+          if (!isGift) {
+            // Base unit price from current variant/product price
+            let baseUnit = 0;
+            if (item.variantId) {
+              const v = product?.variants?.find((x: any) => x.id === item.variantId);
+              baseUnit = parseFloat(String((v as any)?.price ?? 0));
+            }
+            if (!Number.isFinite(baseUnit) || baseUnit <= 0) {
+              baseUnit = parseFloat(String((product as any)?.price ?? 0));
+            }
+
+            const unit = parseFloat(String(item.unitPrice));
+            if (Number.isFinite(baseUnit) && baseUnit > 0 && Number.isFinite(unit) && unit > 0 && baseUnit > unit) {
+              compareAtPrice = Number(baseUnit.toFixed(2));
+            }
+
+            if (offers.length && Number.isFinite(baseUnit) && baseUnit > 0) {
+              const categoryIds = (product?.categories || []).map((c: any) => String(c.id)).filter(Boolean);
+              const picked = storefrontOffersService.pickBestOfferForProduct({
+                offers: offers as any,
+                productId: String(item.productId),
+                categoryIds,
+                baseUnitPrice: baseUnit,
+              });
+              if (picked?.offer?.name) {
+                const discounted = Number(picked.discountedUnitPrice);
+                if (Number.isFinite(discounted) && Number(discounted.toFixed(2)) === Number(unit.toFixed(2))) {
+                  promotionName = String(picked.offer.name);
+                }
+              }
+            }
+          }
+        } catch {
+          // best-effort only
+        }
+
         if (product) {
           productSlug = product.slug || productSlug;
           // Variant image if selected
@@ -198,6 +247,8 @@ export class StorefrontCartService {
           quantity: Number(item.quantity),
           unitPrice: parseFloat(item.unitPrice),
           totalPrice: parseFloat(item.totalPrice),
+          compareAtPrice,
+          promotionName,
           isGift: Boolean((item as any).isGift),
           giftDiscountId: (item as any).giftDiscountId ? String((item as any).giftDiscountId) : undefined,
           image: image || "/placeholder-product.svg",
@@ -207,7 +258,7 @@ export class StorefrontCartService {
     );
 
     const best = await storefrontCartRepository.computeBestDiscount(cart.id);
-    const appliedDiscounts = best.amount > 0 && best.applied
+    const appliedDiscounts = best.applied && (best.amount > 0 || String((best.applied as any)?.type || "") === "free_shipping")
       ? [{ id: best.applied.id, code: best.applied.code, type: best.applied.type as any, value: parseFloat(best.applied.value as any) || 0, amount: best.amount, isAutomatic: Boolean((best.applied as any)?.isAutomatic) }]
       : [];
 

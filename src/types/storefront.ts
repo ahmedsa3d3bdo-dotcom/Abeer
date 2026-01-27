@@ -101,6 +101,8 @@ export interface CartItem {
   quantity: number;
   unitPrice: number;
   totalPrice: number;
+  compareAtPrice?: number;
+  promotionName?: string;
   isGift?: boolean;
   giftDiscountId?: string;
   image: string;

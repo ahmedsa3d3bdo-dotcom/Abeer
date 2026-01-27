@@ -3,7 +3,7 @@ import { z } from "zod";
 import { discountsService } from "../services/discounts.service";
 import { db } from "@/shared/db";
 import * as schema from "@/shared/db/schema";
-import { sql } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { settingsRepository } from "../repositories/settings.repository";
 import { handleRouteError, successResponse } from "../utils/response";
 import { requirePermission } from "../utils/rbac";
@@ -29,6 +29,11 @@ const listQuerySchema = z.object({
   dateTo: z.string().optional(),
   activeNow: z.coerce.boolean().optional(),
   sort: z.enum(["createdAt.desc", "createdAt.asc", "startsAt.desc", "startsAt.asc"]).optional(),
+});
+
+const usageQuerySchema = z.object({
+  page: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().positive().max(100).optional(),
 });
 
 const upsertSchemaObject = z.object({
@@ -164,6 +169,49 @@ export class DiscountsController {
     }
   }
 
+  static async usage(request: NextRequest, id: string) {
+    try {
+      await requirePermission(request, "discounts.view");
+      const query = validateQuery(request.nextUrl.searchParams, usageQuerySchema);
+
+      const page = Math.max(1, Number((query as any)?.page || 1));
+      const limit = Math.min(100, Math.max(1, Number((query as any)?.limit || 20)));
+      const offset = (page - 1) * limit;
+
+      const items = await db
+        .select({
+          orderId: schema.orderDiscounts.orderId,
+          orderNumber: schema.orders.orderNumber,
+          customerEmail: schema.orders.customerEmail,
+          amount: schema.orderDiscounts.amount,
+          code: schema.orderDiscounts.code,
+          createdAt: schema.orderDiscounts.createdAt,
+          totalAmount: schema.orders.totalAmount,
+          currency: schema.orders.currency,
+        })
+        .from(schema.orderDiscounts)
+        .innerJoin(schema.orders, eq(schema.orderDiscounts.orderId, schema.orders.id))
+        .where(eq(schema.orderDiscounts.discountId, id as any))
+        .orderBy(desc(schema.orderDiscounts.createdAt))
+        .limit(limit)
+        .offset(offset);
+
+      const [{ count }] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(schema.orderDiscounts)
+        .where(eq(schema.orderDiscounts.discountId, id as any));
+
+      return successResponse({
+        items,
+        total: Number(count || 0),
+        page,
+        limit,
+      });
+    } catch (e) {
+      return handleRouteError(e, request);
+    }
+  }
+
   static async metrics(request: NextRequest) {
     try {
       await requirePermission(request, "discounts.view");
@@ -175,7 +223,14 @@ export class DiscountsController {
         filters.push(sql`(${schema.discounts.name} ILIKE ${like} OR ${schema.discounts.code} ILIKE ${like})`);
       }
       if (query.status) filters.push(sql`${schema.discounts.status} = ${query.status}`);
-      if (query.type) filters.push(sql`${schema.discounts.type} = ${query.type}`);
+      if (query.type && query.kind !== "bxgy_generic" && query.kind !== "bxgy_bundle") {
+        filters.push(sql`${schema.discounts.type} = ${query.type}`);
+        if (!query.kind) {
+          filters.push(
+            sql`NOT (coalesce(${schema.discounts.metadata} ->> 'kind', '') = 'deal' AND coalesce(${schema.discounts.metadata} ->> 'offerKind', '') IN ('bxgy_generic', 'bxgy_bundle'))`,
+          );
+        }
+      }
       if (query.scope) filters.push(sql`${schema.discounts.scope} = ${query.scope}`);
       if (query.kind) {
         if (query.kind === "coupon") {

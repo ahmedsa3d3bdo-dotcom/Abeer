@@ -47,7 +47,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         unitPrice: schema.orderItems.unitPrice,
         totalPrice: schema.orderItems.totalPrice,
         productPrice: schema.products.price,
+        productCompareAtPrice: schema.products.compareAtPrice,
         variantPrice: schema.productVariants.price,
+        variantCompareAtPrice: schema.productVariants.compareAtPrice,
         variantImage: schema.productVariants.image,
         primaryImage: schema.productImages.url,
       })
@@ -147,6 +149,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         quantity: it.quantity,
         price: parseFloat(it.unitPrice as any),
         total: parseFloat(it.totalPrice as any),
+        compareAtPrice: (() => {
+          const raw = (it as any).variantCompareAtPrice ?? (it as any).productCompareAtPrice;
+          if (raw == null) return null;
+          const n = parseFloat(raw as any);
+          return Number.isFinite(n) && n > 0 ? n : null;
+        })(),
         referencePrice: parseFloat(((it as any).variantPrice ?? (it as any).productPrice ?? "0") as any),
       })),
       shipments: shipments.map((s) => ({

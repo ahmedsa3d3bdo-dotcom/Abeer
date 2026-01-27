@@ -61,6 +61,12 @@ function styleFor(kind: UniversalBadgeKind, value: string) {
       if (v === "system") return SOLID.violet;
       if (v === "custom") return SOLID.blue;
 
+      // discount types
+      if (v === "percentage") return SOLID.blue;
+      if (v === "fixed_amount") return SOLID.violet;
+      if (v === "free_shipping") return SOLID.emerald;
+      if (v === "bxgy") return SOLID.amber;
+
       if (v === "string") return SOLID.blue;
       if (v === "json" || v === "object") return SOLID.violet;
       if (v === "number" || v === "int" || v === "integer" || v === "float" || v === "decimal") return SOLID.emerald;
@@ -211,6 +217,13 @@ function styleFor(kind: UniversalBadgeKind, value: string) {
   }
 
   if (kind === "scope") {
+    // discount scopes
+    if (v === "all") return SOLID.slate;
+    if (v === "products") return SOLID.blue;
+    if (v === "categories") return SOLID.emerald;
+    if (v === "collections") return SOLID.amber;
+    if (v === "customer_groups") return SOLID.violet;
+
     if (v === "global") return SOLID.violet;
     if (v === "local" || v === "store") return SOLID.blue;
     return SOLID.slate;

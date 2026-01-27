@@ -206,6 +206,8 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
             {order.items.map((it: any) => (
               (() => {
                 const isGift = Number(it.price ?? 0) === 0 && Number(it.total ?? 0) === 0;
+                const compareAt = Number(it.compareAtPrice ?? 0);
+                const hasCompareAt = Number.isFinite(compareAt) && compareAt > 0 && compareAt > Number(it.price ?? 0);
                 return (
                   <div key={it.id} className="grid grid-cols-12 gap-2 p-2 text-sm">
                     <div className="col-span-5">
@@ -216,8 +218,30 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
                     </div>
                     <div className="col-span-2 truncate">{isGift ? (promotionNames || "—") : ""}</div>
                     <div className="col-span-2 text-right">{it.quantity}</div>
-                    <div className="col-span-1 text-right">{isGift ? "FREE" : `$${Number(it.price).toFixed(2)}`}</div>
-                    <div className="col-span-2 text-right">{isGift ? "FREE" : `$${Number(it.total).toFixed(2)}`}</div>
+                    <div className="col-span-1 text-right">
+                      {isGift ? (
+                        "FREE"
+                      ) : (
+                        <div className="flex flex-col items-end leading-tight">
+                          {hasCompareAt ? (
+                            <span className="text-xs text-muted-foreground line-through">${compareAt.toFixed(2)}</span>
+                          ) : null}
+                          <span>${Number(it.price).toFixed(2)}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="col-span-2 text-right">
+                      {isGift ? (
+                        "FREE"
+                      ) : (
+                        <div className="flex flex-col items-end leading-tight">
+                          {hasCompareAt ? (
+                            <span className="text-xs text-muted-foreground line-through">${(compareAt * Number(it.quantity ?? 0)).toFixed(2)}</span>
+                          ) : null}
+                          <span>${Number(it.total).toFixed(2)}</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })()
@@ -230,6 +254,12 @@ export default function InvoicePage({ params }: { params: Promise<{ id: string }
               <span className="text-muted-foreground">Subtotal</span>
               <span>${displaySubtotal.toFixed(2)}</span>
             </div>
+            {promotionNames && giftValue <= 0 ? (
+              <div className="flex w-full max-w-sm justify-between">
+                <span className="text-muted-foreground">Promotion ({promotionNames})</span>
+                <span>—</span>
+              </div>
+            ) : null}
             {giftValue > 0 ? (
               <div className="flex w-full max-w-sm justify-between">
                 <span className="text-muted-foreground">Discount{promotionNames ? ` (${promotionNames})` : ""}</span>

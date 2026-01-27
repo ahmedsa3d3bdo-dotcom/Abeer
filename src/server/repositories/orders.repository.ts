@@ -95,7 +95,9 @@ export class OrdersRepository {
         taxAmount: schema.orderItems.taxAmount,
         discountAmount: schema.orderItems.discountAmount,
         productPrice: schema.products.price,
+        productCompareAtPrice: schema.products.compareAtPrice,
         variantPrice: schema.productVariants.price,
+        variantCompareAtPrice: schema.productVariants.compareAtPrice,
       })
       .from(schema.orderItems)
       .leftJoin(schema.products, eq(schema.products.id, schema.orderItems.productId))

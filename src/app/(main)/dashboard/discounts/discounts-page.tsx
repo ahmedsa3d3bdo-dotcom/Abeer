@@ -28,6 +28,7 @@ import { FormModal } from "@/components/ui/form-modal";
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 
 import { getDiscountColumns, type DiscountRow } from "./columns";
+import { DiscountUsageSheet } from "./discount-usage-sheet";
 
 const DEFAULT_LIMIT = 10;
 
@@ -78,6 +79,9 @@ export default function DiscountsPage() {
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<DiscountRow | null>(null);
+
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailRow, setDetailRow] = useState<DiscountRow | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DiscountRow | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -115,6 +119,10 @@ export default function DiscountsPage() {
   const columns = useMemo(
     () =>
       getDiscountColumns({
+        onView: (row) => {
+          setDetailRow(row);
+          setDetailOpen(true);
+        },
         onEdit: async (row) => {
           setEditing(row);
           setDiscountKind("coupon");
@@ -1285,6 +1293,12 @@ export default function DiscountsPage() {
         <DataTable table={table as any} columns={columns as any} />
       </div>
       <DataTablePagination table={table as any} total={total} pageIndex={pageIndex} pageSize={pageSize} />
+
+      <DiscountUsageSheet
+        open={detailOpen}
+        onOpenChange={(o) => (o ? setDetailOpen(true) : (setDetailOpen(false), setDetailRow(null)))}
+        discount={detailRow}
+      />
 
       <ConfirmDeleteDialog
         open={deleteOpen}

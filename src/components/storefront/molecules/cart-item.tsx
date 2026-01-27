@@ -39,9 +39,10 @@ export function CartItem({ item }: CartItemProps) {
   };
 
   const itemTotal = item.totalPrice;
-  const hasDiscount = false; // Cart items don't have compareAtPrice
-  const discount = 0;
   const isGift = Boolean((item as any).isGift);
+  const compareAt = Number((item as any).compareAtPrice ?? 0);
+  const hasCompareAt = !isGift && Number.isFinite(compareAt) && compareAt > 0 && compareAt > Number(item.unitPrice ?? 0);
+  const promotionName = !isGift ? String((item as any).promotionName || "") : "";
 
   return (
     <>
@@ -76,6 +77,10 @@ export function CartItem({ item }: CartItemProps) {
                   <div className="mt-1 text-xs font-medium text-green-700 dark:text-green-300">
                     Free gift
                   </div>
+                ) : null}
+
+                {promotionName ? (
+                  <div className="mt-1 text-xs font-medium text-green-700 dark:text-green-300">{promotionName}</div>
                 ) : null}
                 
                 {/* Variant Info */}
@@ -129,8 +134,14 @@ export function CartItem({ item }: CartItemProps) {
                   </>
                 ) : (
                   <>
+                    {hasCompareAt ? (
+                      <div className="text-xs text-muted-foreground line-through">${(compareAt * Number(item.quantity ?? 0)).toFixed(2)}</div>
+                    ) : null}
                     <div className="font-semibold">${itemTotal.toFixed(2)}</div>
-                    <div className="text-xs text-muted-foreground mt-1">${item.unitPrice.toFixed(2)} each</div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      {hasCompareAt ? <span className="line-through mr-2">${compareAt.toFixed(2)}</span> : null}
+                      <span>${item.unitPrice.toFixed(2)} each</span>
+                    </div>
                   </>
                 )}
               </div>

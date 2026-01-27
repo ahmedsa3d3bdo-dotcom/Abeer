@@ -98,6 +98,9 @@ export function OrderReview({
           {cart.items.map((item) => (
             (() => {
               const isGift = Boolean((item as any).isGift) || (Number(item.unitPrice ?? 0) === 0 && Number(item.totalPrice ?? 0) === 0);
+              const compareAt = Number((item as any).compareAtPrice ?? 0);
+              const hasCompareAt = !isGift && Number.isFinite(compareAt) && compareAt > 0 && compareAt > Number(item.unitPrice ?? 0);
+              const promotionName = !isGift ? String((item as any).promotionName || "") : "";
               return (
             <div key={item.id} className="flex gap-4">
               <div className="relative h-16 w-16 rounded bg-muted flex-shrink-0">
@@ -114,14 +117,18 @@ export function OrderReview({
                 {isGift ? (
                   <p className="text-xs font-medium text-green-700 dark:text-green-300">Free gift</p>
                 ) : null}
+                {promotionName ? (
+                  <p className="text-xs font-medium text-green-700 dark:text-green-300">{promotionName}</p>
+                ) : null}
                 {item.variantName && (
                   <p className="text-xs text-muted-foreground">{item.variantName}</p>
                 )}
                 <p className="text-xs text-muted-foreground">Qty: {item.quantity}</p>
               </div>
-              <p className={isGift ? "font-semibold text-sm text-green-700 dark:text-green-300" : "font-semibold text-sm"}>
-                {isGift ? "FREE" : `$${item.totalPrice.toFixed(2)}`}
-              </p>
+              <div className={isGift ? "text-right font-semibold text-sm text-green-700 dark:text-green-300" : "text-right font-semibold text-sm"}>
+                {hasCompareAt ? <div className="text-xs text-muted-foreground line-through">${(compareAt * Number(item.quantity ?? 0)).toFixed(2)}</div> : null}
+                <div>{isGift ? "FREE" : `$${item.totalPrice.toFixed(2)}`}</div>
+              </div>
             </div>
               );
             })()
@@ -136,6 +143,12 @@ export function OrderReview({
             <span className="text-muted-foreground">Subtotal</span>
             <span>${cart.subtotal.toFixed(2)}</span>
           </div>
+          {(cart.appliedDiscounts || []).some((d: any) => Number(d?.amount ?? 0) === 0) ? (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Promotion</span>
+              <span>—</span>
+            </div>
+          ) : null}
           {cart.discountAmount > 0 && (
             <div className="flex justify-between text-green-600">
               <span>Discount</span>

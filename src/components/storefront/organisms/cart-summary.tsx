@@ -92,7 +92,7 @@ export function CartSummary({ cart }: CartSummaryProps) {
             >
               <Tag className="h-3 w-3" />
               <span className="flex-1 font-medium">{discount.code}</span>
-              <span>-${discount.amount.toFixed(2)}</span>
+              {Number(discount.amount ?? 0) === 0 ? <span>FREE</span> : <span>-${discount.amount.toFixed(2)}</span>}
               {!discount.isAutomatic && (
                 <Button
                   type="button"

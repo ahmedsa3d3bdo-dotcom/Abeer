@@ -3,6 +3,7 @@ import * as schema from "@/shared/db/schema";
 import { and, eq, gte, inArray, sql } from "drizzle-orm";
 import { storefrontCartService } from "./cart.service";
 import { storefrontCartRepository } from "../repositories/cart.repository";
+import { storefrontOffersService } from "./offers.service";
 import { auth } from "@/auth";
 import { notificationsService } from "../../services/notifications.service";
 import { settingsRepository } from "../../repositories/settings.repository";
@@ -37,10 +38,10 @@ export class StorefrontCheckoutService {
 
     // Re-evaluate best discount (applied code takes priority) and enforce usageLimit
     let discountAmount = 0;
-    let appliedDiscount: { id: string; code: string | null } | null = null;
+    let appliedDiscount: { id: string; code: string | null; type?: string } | null = null;
     try {
       const best = await storefrontCartRepository.computeBestDiscount(input.cartId);
-      if (best.amount > 0 && best.applied?.id) {
+      if (best.applied?.id && (best.amount > 0 || String((best.applied as any)?.type || "") === "free_shipping")) {
         const [disc] = await db
           .select()
           .from(schema.discounts)
@@ -50,11 +51,67 @@ export class StorefrontCheckoutService {
         const used = Number((disc as any)?.usageCount || 0);
         if (limit == null || used < limit) {
           discountAmount = Number(best.amount || 0);
-          appliedDiscount = { id: best.applied.id, code: best.applied.code || null };
+          appliedDiscount = { id: best.applied.id, code: best.applied.code || null, type: String((best.applied as any)?.type || "") };
         }
       }
     } catch {
       // ignore discount evaluation errors at checkout time
+    }
+
+    // Detect applied scheduled offers (kind=offer) by comparing base price with cart item unitPrice
+    const scheduledOfferIds = new Set<string>();
+    try {
+      const offers = await storefrontOffersService.listActivePriceOffers();
+      if (offers.length) {
+        for (const item of cart.items as any[]) {
+          if (Boolean(item?.isGift)) continue;
+          const productId = String(item?.productId || "");
+          if (!productId) continue;
+
+          // Base unit price from current variant/product price
+          let baseUnit = 0;
+          if (item?.variantId) {
+            const [v] = await db
+              .select({ price: schema.productVariants.price, productId: schema.productVariants.productId })
+              .from(schema.productVariants)
+              .where(eq(schema.productVariants.id, item.variantId as any))
+              .limit(1);
+            baseUnit = parseFloat(String((v as any)?.price ?? 0));
+          }
+          if (!Number.isFinite(baseUnit) || baseUnit <= 0) {
+            const [p] = await db
+              .select({ price: schema.products.price })
+              .from(schema.products)
+              .where(eq(schema.products.id, productId as any))
+              .limit(1);
+            baseUnit = parseFloat(String((p as any)?.price ?? 0));
+          }
+          if (!Number.isFinite(baseUnit) || baseUnit <= 0) continue;
+
+          const catRows = await db
+            .select({ categoryId: schema.productCategories.categoryId })
+            .from(schema.productCategories)
+            .where(eq(schema.productCategories.productId, productId as any));
+          const categoryIds = catRows.map((r) => String(r.categoryId)).filter(Boolean);
+
+          const picked = storefrontOffersService.pickBestOfferForProduct({
+            offers,
+            productId,
+            categoryIds,
+            baseUnitPrice: baseUnit,
+          });
+          if (!picked?.offer?.id) continue;
+
+          const discounted = Number(picked.discountedUnitPrice);
+          const cartUnit = Number(item?.unitPrice ?? 0);
+          if (!Number.isFinite(discounted) || !Number.isFinite(cartUnit)) continue;
+          if (Number(discounted.toFixed(2)) === Number(cartUnit.toFixed(2))) {
+            scheduledOfferIds.add(String(picked.offer.id));
+          }
+        }
+      }
+    } catch {
+      // best-effort only
     }
 
     const totalAmount = subtotal + taxAmount + shippingAmount - discountAmount;
@@ -257,7 +314,7 @@ export class StorefrontCheckoutService {
       }
 
       // Persist applied discount snapshot and update usage counter
-      if (order && appliedDiscount && discountAmount > 0) {
+      if (order && appliedDiscount) {
         try {
           await tx.insert(schema.orderDiscounts).values({
             orderId: order.id,
@@ -285,7 +342,37 @@ export class StorefrontCheckoutService {
               code: null,
               amount: "0.00",
             } as any);
+
+            // Increment usageCount even if amount is 0 (common for BXGY gifts)
+            await tx
+              .update(schema.discounts)
+              .set({ usageCount: sql`${schema.discounts.usageCount} + 1` } as any)
+              .where(eq(schema.discounts.id, discId as any));
+
             existing.add(String(discId));
+          }
+        } catch {}
+      }
+
+      if (order && scheduledOfferIds.size) {
+        try {
+          const existing = new Set<string>();
+          if (appliedDiscount?.id) existing.add(String(appliedDiscount.id));
+          for (const discId of giftDiscountIds) existing.add(String(discId));
+
+          for (const offerId of Array.from(scheduledOfferIds)) {
+            if (!offerId || existing.has(String(offerId))) continue;
+            await tx.insert(schema.orderDiscounts).values({
+              orderId: order.id,
+              discountId: offerId as any,
+              code: null,
+              amount: "0.00",
+            } as any);
+            await tx
+              .update(schema.discounts)
+              .set({ usageCount: sql`${schema.discounts.usageCount} + 1` } as any)
+              .where(eq(schema.discounts.id, offerId as any));
+            existing.add(String(offerId));
           }
         } catch {}
       }
