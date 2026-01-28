@@ -1,6 +1,6 @@
 import { db } from "@/shared/db";
 import * as schema from "@/shared/db/schema";
-import { and, desc, eq, ilike, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, sql } from "drizzle-orm";
 
 export class OrdersRepository {
   async list(params: {
@@ -147,7 +147,73 @@ export class OrdersRepository {
       .leftJoin(schema.discounts, eq(schema.discounts.id, schema.orderDiscounts.discountId))
       .where(eq(schema.orderDiscounts.orderId, id));
 
-    return { order, items, shipments, shippingAddress, orderDiscounts };
+    const discountIds = Array.from(
+      new Set(orderDiscounts.map((d) => d.discountId).filter(Boolean)),
+    ) as string[];
+
+    let orderDiscountsWithTargets = orderDiscounts as Array<typeof orderDiscounts[number] & { targetProductIds?: string[] }>;
+
+    if (discountIds.length) {
+      const discountProductRows = await db
+        .select({
+          discountId: schema.discountProducts.discountId,
+          productId: schema.discountProducts.productId,
+        })
+        .from(schema.discountProducts)
+        .where(inArray(schema.discountProducts.discountId, discountIds));
+
+      const discountCategoryRows = await db
+        .select({
+          discountId: schema.discountCategories.discountId,
+          categoryId: schema.discountCategories.categoryId,
+        })
+        .from(schema.discountCategories)
+        .where(inArray(schema.discountCategories.discountId, discountIds));
+
+      const categoryIds = Array.from(new Set(discountCategoryRows.map((r) => r.categoryId))).filter(Boolean) as string[];
+
+      const productCategoryRows = categoryIds.length
+        ? await db
+            .select({
+              productId: schema.productCategories.productId,
+              categoryId: schema.productCategories.categoryId,
+            })
+            .from(schema.productCategories)
+            .where(inArray(schema.productCategories.categoryId, categoryIds))
+        : [];
+
+      const productsByCategoryId = new Map<string, string[]>();
+      for (const row of productCategoryRows) {
+        const arr = productsByCategoryId.get(row.categoryId) ?? [];
+        arr.push(row.productId);
+        productsByCategoryId.set(row.categoryId, arr);
+      }
+
+      const productIdsByDiscountId = new Map<string, Set<string>>();
+      for (const row of discountProductRows) {
+        const set = productIdsByDiscountId.get(row.discountId) ?? new Set<string>();
+        set.add(row.productId);
+        productIdsByDiscountId.set(row.discountId, set);
+      }
+
+      for (const row of discountCategoryRows) {
+        const set = productIdsByDiscountId.get(row.discountId) ?? new Set<string>();
+        const productIds = productsByCategoryId.get(row.categoryId) ?? [];
+        for (const productId of productIds) set.add(productId);
+        productIdsByDiscountId.set(row.discountId, set);
+      }
+
+      orderDiscountsWithTargets = orderDiscounts.map((d) => {
+        const key = d.discountId ?? "";
+        const targetProductIds = productIdsByDiscountId.get(key);
+        return {
+          ...d,
+          targetProductIds: targetProductIds ? Array.from(targetProductIds) : [],
+        };
+      });
+    }
+
+    return { order, items, shipments, shippingAddress, orderDiscounts: orderDiscountsWithTargets };
   }
 
   async update(id: string, patch: Partial<{ status: any; paymentStatus: any; adminNote: string | null }>) {
