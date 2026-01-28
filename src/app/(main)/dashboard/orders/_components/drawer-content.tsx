@@ -1,9 +1,12 @@
 "use client";
 
+import { useMemo } from "react";
 import { LocalDate, LocalDateTime } from "@/components/common/local-datetime";
 import { StatusBadge } from "@/components/common/status-badge";
 import { Separator } from "@/components/ui/separator";
 import { formatCurrency } from "@/lib/utils";
+import { computeOrderTotals, normalizeOrderData } from "@/lib/pricing";
+import { PriceSummary } from "@/components/shared/pricing";
 
 import { OrderItemsTable } from "./order-items-table";
 
@@ -11,86 +14,24 @@ export function DrawerContent({ d }: { d: any }) {
   const currency = d?.order?.currency || "CAD";
   const locale = "en-CA";
 
-  const allDiscountLines: any[] = Array.isArray(d?.orderDiscounts)
-    ? d.orderDiscounts
-    : Number(d?.order?.discountAmount || 0) > 0
-      ? [{ id: "order-discount", code: d?.order?.appliedDiscountCode || null, amount: d?.order?.discountAmount }]
-      : [];
+  // Use unified pricing logic
+  const pricingTotals = useMemo(() => {
+    const orderData = {
+      items: d?.items || [],
+      appliedDiscounts: d?.orderDiscounts || [],
+      subtotal: d?.order?.subtotal,
+      discountAmount: d?.order?.discountAmount,
+      shippingAmount: d?.order?.shippingAmount,
+      taxAmount: d?.order?.taxAmount,
+      totalAmount: d?.order?.totalAmount,
+      appliedDiscountCode: d?.order?.appliedDiscountCode,
+    };
+    const normalized = normalizeOrderData(orderData);
+    return computeOrderTotals(normalized);
+  }, [d]);
 
-  const offerPromotionNames = allDiscountLines
-    .filter((od) => Number(od?.amount ?? 0) === 0)
-    .filter((od) => {
-      if (String(od?.discountType || "") === "free_shipping") return false;
-      const md: any = (od as any)?.discountMetadata || null;
-      return md?.kind === "offer" && md?.offerKind === "standard";
-    })
-    .map((od) => od?.discountName || od?.code || "")
-    .filter(Boolean)
-    .join(" • ");
-
-  const dealPromotionNames = allDiscountLines
-    .filter((od) => Number(od?.amount ?? 0) === 0)
-    .filter((od) => {
-      const md: any = (od as any)?.discountMetadata || null;
-      return md?.kind === "deal" && (md?.offerKind === "bxgy_generic" || md?.offerKind === "bxgy_bundle");
-    })
-    .map((od) => od?.discountName || od?.code || "")
-    .filter(Boolean)
-    .join(" • ");
-
-  const promotionNames = [offerPromotionNames, dealPromotionNames].filter(Boolean).join(" • ");
-
-  const discountLines = allDiscountLines.filter((od) => Number(od?.amount ?? 0) > 0);
-
-  const giftValue = (d?.items || []).reduce((sum: number, it: any) => {
-    const isGift = Number(it.unitPrice ?? 0) === 0 && Number(it.totalPrice ?? 0) === 0;
-    if (!isGift) return sum;
-    const qty = Number(it.quantity || 0);
-    if (!Number.isFinite(qty) || qty <= 0) return sum;
-    const ref = parseFloat(String(it.variantPrice ?? it.productPrice ?? 0));
-    if (!Number.isFinite(ref) || ref <= 0) return sum;
-    return sum + ref * qty;
-  }, 0);
-
-  const offerSavings = (d?.items || []).reduce((sum: number, it: any) => {
-    if (!offerPromotionNames) return sum;
-    const isGift = Number(it.unitPrice ?? 0) === 0 && Number(it.totalPrice ?? 0) === 0;
-    if (isGift) return sum;
-    const qty = Number(it.quantity || 0);
-    if (!Number.isFinite(qty) || qty <= 0) return sum;
-    const base = parseFloat(String(it.variantPrice ?? it.productPrice ?? 0));
-    const unit = Number(it.unitPrice ?? 0);
-    if (!Number.isFinite(base) || base <= 0) return sum;
-    if (!Number.isFinite(unit) || unit <= 0) return sum;
-    if (unit >= base) return sum;
-    return sum + (base - unit) * qty;
-  }, 0);
-
-  const saleSavings = (d?.items || []).reduce((sum: number, it: any) => {
-    const isGift = Number(it.unitPrice ?? 0) === 0 && Number(it.totalPrice ?? 0) === 0;
-    if (isGift) return sum;
-    const qty = Number(it.quantity || 0);
-    if (!Number.isFinite(qty) || qty <= 0) return sum;
-    const base = parseFloat(String(it.variantPrice ?? it.productPrice ?? 0));
-    if (!Number.isFinite(base) || base <= 0) return sum;
-    const compareAt = Number(it.variantCompareAtPrice ?? it.productCompareAtPrice ?? 0);
-    if (!Number.isFinite(compareAt) || compareAt <= base) return sum;
-    return sum + (compareAt - base) * qty;
-  }, 0);
-
-  const promotionSavings = Number(giftValue || 0) + Number(offerSavings || 0);
-
-  const couponLines = discountLines.filter((od) => Boolean(od?.code));
-  const otherDiscountLines = discountLines.filter((od) => !od?.code);
-
-  const couponDiscount = couponLines.reduce((sum: number, od: any) => sum + Number(od?.amount ?? 0), 0);
-  const discountsExcludingCoupon =
-    (Number.isFinite(promotionSavings) ? promotionSavings : 0) +
-    (Number.isFinite(saleSavings) ? saleSavings : 0) +
-    otherDiscountLines.reduce((sum: number, od: any) => sum + Number(od?.amount ?? 0), 0);
-
-  const totalAfterDiscounts = Number(d.order?.totalAmount ?? 0);
-  const totalBeforeDiscounts = totalAfterDiscounts + Number(discountsExcludingCoupon || 0) + Number(couponDiscount || 0);
+  // Extract promotion names for the items table
+  const promotionNames = pricingTotals.promotionNames.join(" • ");
 
   return (
     <>
@@ -130,25 +71,17 @@ export function DrawerContent({ d }: { d: any }) {
           )}
         </div>
         <div className="rounded-lg border p-4">
-          <div className="text-xs text-muted-foreground">Total</div>
-          <div className="mt-1 flex items-center justify-between">
-            <div className="text-xs text-muted-foreground">Before discounts</div>
-            <div className="text-sm font-medium">{formatCurrency(totalBeforeDiscounts, { currency, locale })}</div>
-          </div>
-          <div className="mt-1 flex items-center justify-between">
-            <div className="text-xs text-muted-foreground">Discounts</div>
-            <div className="text-sm font-medium">-{formatCurrency(discountsExcludingCoupon, { currency, locale })}</div>
-          </div>
-          {couponLines.map((od) => (
-            <div key={String(od.id)} className="mt-1 flex items-center justify-between">
-              <div className="text-xs text-muted-foreground">Coupon {od?.code ? `(${String(od.code)})` : ""}</div>
-              <div className="text-sm font-medium">-{formatCurrency(Number(od?.amount ?? 0), { currency, locale })}</div>
-            </div>
-          ))}
-          <Separator className="my-2" />
-          <div className="flex items-center justify-between">
-            <div className="text-xs text-muted-foreground">After discounts</div>
-            <div className="text-sm font-semibold">{formatCurrency(totalAfterDiscounts, { currency, locale })}</div>
+          <div className="text-xs text-muted-foreground">Order Summary</div>
+          <div className="mt-2 space-y-1 text-sm">
+            <PriceSummary
+              totals={pricingTotals}
+              currency={currency}
+              locale={locale}
+              showDetails={true}
+              showBeforeDiscounts={true}
+              showTotalDiscounts={true}
+              size="sm"
+            />
           </div>
         </div>
       </div>
@@ -198,6 +131,9 @@ export function DrawerContent({ d }: { d: any }) {
               <div className="text-right">{s.estimatedDeliveryAt ? <LocalDate value={s.estimatedDeliveryAt} /> : "—"}</div>
             </div>
           ))}
+          {(!d.shipments || d.shipments.length === 0) && (
+            <div className="p-3 text-sm text-muted-foreground">No shipments yet</div>
+          )}
         </div>
       </div>
     </>

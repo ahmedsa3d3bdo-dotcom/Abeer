@@ -1,24 +1,27 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Download, Package, MapPin, CreditCard, Truck, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, Download, Package, MapPin, CreditCard, Truck, ChevronDown, ChevronUp, Tag } from "lucide-react";
 import { LocalDate } from "@/components/common/local-datetime";
 import { usePrint } from "@/components/common/print/print-provider";
 import { siteConfig } from "@/config/site";
 import { toast } from "sonner";
 import { StatusBadge } from "@/components/common/status-badge";
+import { computeOrderTotals, normalizeOrderData, getDiscountLabel } from "@/lib/pricing";
+import { PriceSummary, InvoicePriceSummary, PromotionBadge } from "@/components/shared/pricing";
+import { formatCurrency } from "@/lib/utils";
 
 export default function OrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const [orderId, setOrderId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [order, setOrder] = useState<any | null>(null);
-  const [itemsExpanded, setItemsExpanded] = useState(false);
+  const [itemsExpanded, setItemsExpanded] = useState(true);
   const { print, isPrinting } = usePrint();
   const [printPreparing, setPrintPreparing] = useState(false);
 
@@ -43,6 +46,13 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
       mounted = false;
     };
   }, [params]);
+
+  // Compute pricing totals using unified logic
+  const pricingTotals = useMemo(() => {
+    if (!order) return null;
+    const normalized = normalizeOrderData(order);
+    return computeOrderTotals(normalized);
+  }, [order]);
 
   const getSeller = (settings: Record<string, string> | null) => {
     const get = (key: string) => String(settings?.[key] ?? "").trim();
@@ -70,82 +80,10 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
     return { name, email, phone, addressLine1, cityLine, country };
   };
 
-  function InvoiceDocument({ order, settings }: { order: any; settings: Record<string, string> | null }) {
+  function InvoiceDocument({ order, settings, totals }: { order: any; settings: Record<string, string> | null; totals: ReturnType<typeof computeOrderTotals> | null }) {
     const siteName = settings?.site_name || siteConfig.name || "";
     const seller = getSeller(settings);
-    const totals = {
-      subtotal: Number(order?.subtotal || 0),
-      shipping: Number(order?.shipping || 0),
-      tax: Number(order?.tax || 0),
-      discount: Number(order?.discount || 0),
-      total: Number(order?.total || 0),
-    };
-
-    const discountLines: any[] = Array.isArray(order?.discounts)
-      ? order.discounts
-      : totals.discount > 0
-        ? [{ id: "order-discount", code: null, amount: totals.discount }]
-        : [];
-
-    const promotionNames = discountLines
-      .filter((d: any) => Number(d?.amount ?? 0) === 0)
-      .filter((d: any) => {
-        if (String(d?.type || "") === "free_shipping") return false;
-        const md: any = d?.metadata || null;
-        return (md?.kind === "offer" && md?.offerKind === "standard") || (md?.kind === "deal" && (md?.offerKind === "bxgy_generic" || md?.offerKind === "bxgy_bundle"));
-      })
-      .map((d: any) => d?.name || d?.discountName || d?.code || "")
-      .filter(Boolean)
-      .join(" • ");
-
-    const monetaryDiscountLines = discountLines.filter((d: any) => Number(d?.amount ?? 0) > 0);
-
-    const promotionSavings = (() => {
-      if (!Array.isArray(order?.items)) return 0;
-      let sum = 0;
-      for (const it of order.items as any[]) {
-        const qty = Number(it?.quantity || 0);
-        if (!Number.isFinite(qty) || qty <= 0) continue;
-        const unit = Number(it?.price ?? 0);
-        const total = Number(it?.total ?? 0);
-        const isGift = unit === 0 && total === 0;
-        const base = Number(it?.referencePrice ?? 0);
-        if (!Number.isFinite(base) || base <= 0) continue;
-
-        if (isGift) {
-          sum += base * qty;
-          continue;
-        }
-        if (promotionNames && Number.isFinite(unit) && unit > 0 && unit < base) {
-          sum += (base - unit) * qty;
-        }
-      }
-      return Math.max(0, Number(sum.toFixed(2)));
-    })();
-
-    const saleSavings = (() => {
-      if (!Array.isArray(order?.items)) return 0;
-      let sum = 0;
-      for (const it of order.items as any[]) {
-        const qty = Number(it?.quantity || 0);
-        if (!Number.isFinite(qty) || qty <= 0) continue;
-        const unit = Number(it?.price ?? 0);
-        const total = Number(it?.total ?? 0);
-        const isGift = unit === 0 && total === 0;
-        if (isGift) continue;
-        const base = Number(it?.referencePrice ?? 0);
-        const compareAt = Number(it?.compareAtPrice ?? 0);
-        if (!Number.isFinite(base) || base <= 0) continue;
-        if (!Number.isFinite(compareAt) || compareAt <= base) continue;
-        sum += (compareAt - base) * qty;
-      }
-      return Math.max(0, Number(sum.toFixed(2)));
-    })();
-
-    const displaySubtotal =
-      totals.subtotal +
-      (Number.isFinite(promotionSavings) ? promotionSavings : 0) +
-      (Number.isFinite(saleSavings) ? saleSavings : 0);
+    const items = Array.isArray(order?.items) ? order.items : [];
 
     return (
       <div className="invoice-print-root mx-auto max-w-4xl p-6 print:p-0">
@@ -177,7 +115,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
               <div className="text-sm leading-6">
                 {order?.shippingAddress ? (
                   <>
-                    <div>{order.shippingAddress.name}</div>
+                    <div>{order.shippingAddress.name || `${order.shippingAddress.firstName} ${order.shippingAddress.lastName}`.trim()}</div>
                     <div>{order.shippingAddress.addressLine1}</div>
                     {order.shippingAddress.addressLine2 && <div>{order.shippingAddress.addressLine2}</div>}
                     <div>
@@ -206,111 +144,65 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
 
           <div className="my-6 h-px w-full bg-border" />
 
+          {/* Items table */}
           <div className="rounded-md border">
             <div className="grid grid-cols-12 gap-2 border-b p-2 text-xs text-muted-foreground">
-              <div className="col-span-7">Item</div>
-              <div className="col-span-2 text-right">Qty</div>
-              <div className="col-span-1 text-right">Price</div>
-              <div className="col-span-2 text-right">Total</div>
+              <div className="col-span-5">Item</div>
+              <div className="col-span-2 text-center">Qty</div>
+              <div className="col-span-2 text-right">Unit Price</div>
+              <div className="col-span-3 text-right">Total</div>
             </div>
-            {Array.isArray(order?.items) &&
-              order.items.map((it: any) => (
-                <div key={it.id} className="grid grid-cols-12 gap-2 p-2 text-sm">
-                  <div className="col-span-7">
+            {items.map((it: any) => {
+              const isGift = Number(it.price ?? 0) === 0 && Number(it.total ?? 0) === 0;
+              const qty = Number(it.quantity ?? 0);
+              const unit = Number(it.price ?? 0);
+              const total = Number(it.total ?? 0);
+              const compareAt = Number(it.compareAtPrice ?? 0);
+              const hasCompareAt = compareAt > 0 && compareAt > unit;
+
+              return (
+                <div key={it.id} className="grid grid-cols-12 gap-2 p-2 text-sm border-b last:border-b-0">
+                  <div className="col-span-5">
                     <div className="font-medium">{it.name}</div>
-                    {Number(it.price ?? 0) === 0 && Number(it.total ?? 0) === 0 ? (
-                      <div className="text-xs font-medium text-green-700 dark:text-green-300">Free gift</div>
-                    ) : null}
+                    {isGift && <div className="text-xs font-medium text-green-700 dark:text-green-300">Free gift</div>}
+                    {it.promotionName && !isGift && (
+                      <div className="text-xs font-medium text-green-700 dark:text-green-300">{it.promotionName}</div>
+                    )}
                     {it.variant && <div className="text-xs text-muted-foreground">{it.variant}</div>}
                     {it.sku && <div className="text-xs text-muted-foreground">SKU: {it.sku}</div>}
                   </div>
-                  <div className="col-span-2 text-right">{it.quantity}</div>
-                  <div className="col-span-1 text-right">
-                    {(() => {
-                      const unit = Number(it.price ?? 0);
-                      const total = Number(it.total ?? 0);
-                      const isGift = unit === 0 && total === 0;
-                      if (isGift) return "FREE";
-                      const compareAt = Number(it.compareAtPrice ?? 0);
-                      const hasCompareAt = Number.isFinite(compareAt) && compareAt > 0 && compareAt > unit;
-                      return (
-                        <div className="flex flex-col items-end leading-tight">
-                          {hasCompareAt ? (
-                            <span className="text-xs text-muted-foreground line-through">${compareAt.toFixed(2)}</span>
-                          ) : null}
-                          <span>${unit.toFixed(2)}</span>
-                        </div>
-                      );
-                    })()}
-                  </div>
+                  <div className="col-span-2 text-center">{qty}</div>
                   <div className="col-span-2 text-right">
-                    {(() => {
-                      const unit = Number(it.price ?? 0);
-                      const total = Number(it.total ?? 0);
-                      const qty = Number(it.quantity ?? 0);
-                      const isGift = unit === 0 && total === 0;
-                      if (isGift) return "FREE";
-                      const compareAt = Number(it.compareAtPrice ?? 0);
-                      const hasCompareAt = Number.isFinite(compareAt) && compareAt > 0 && compareAt > unit;
-                      return (
-                        <div className="flex flex-col items-end leading-tight">
-                          {hasCompareAt ? (
-                            <span className="text-xs text-muted-foreground line-through">${(compareAt * qty).toFixed(2)}</span>
-                          ) : null}
-                          <span>${total.toFixed(2)}</span>
-                        </div>
-                      );
-                    })()}
+                    {isGift ? (
+                      "FREE"
+                    ) : (
+                      <div className="flex flex-col items-end leading-tight">
+                        {hasCompareAt && <span className="text-xs text-muted-foreground line-through">${compareAt.toFixed(2)}</span>}
+                        <span>${unit.toFixed(2)}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="col-span-3 text-right">
+                    {isGift ? (
+                      "FREE"
+                    ) : (
+                      <div className="flex flex-col items-end leading-tight">
+                        {hasCompareAt && <span className="text-xs text-muted-foreground line-through">${(compareAt * qty).toFixed(2)}</span>}
+                        <span>${total.toFixed(2)}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
-              ))}
+              );
+            })}
           </div>
 
-          <div className="mt-6 flex flex-col items-end gap-1 text-sm">
-            <div className="flex w-full max-w-sm justify-between">
-              <span className="text-muted-foreground">Subtotal</span>
-              <span>${displaySubtotal.toFixed(2)}</span>
+          {/* Totals using unified component */}
+          {totals && (
+            <div className="mt-6">
+              <InvoicePriceSummary totals={totals} />
             </div>
-            {saleSavings > 0 ? (
-              <div className="flex w-full max-w-sm justify-between">
-                <span className="text-muted-foreground">Sale savings</span>
-                <span>-${saleSavings.toFixed(2)}</span>
-              </div>
-            ) : null}
-            {promotionSavings > 0 ? (
-              <div className="flex w-full max-w-sm justify-between">
-                <span className="text-muted-foreground">Promotion{promotionNames ? ` (${promotionNames})` : ""}</span>
-                <span>-${promotionSavings.toFixed(2)}</span>
-              </div>
-            ) : promotionNames ? (
-              <div className="flex w-full max-w-sm justify-between">
-                <span className="text-muted-foreground">Promotion ({promotionNames})</span>
-                <span>—</span>
-              </div>
-            ) : null}
-            {monetaryDiscountLines.map((d: any) => (
-              <div key={String(d.id)} className="flex w-full max-w-sm justify-between">
-                <span className="text-muted-foreground">
-                  Discount
-                  {d?.code ? ` (${String(d.code)})` : d?.name ? ` (${String(d.name)})` : ""}
-                </span>
-                <span>-${Number(d?.amount || 0).toFixed(2)}</span>
-              </div>
-            ))}
-            <div className="flex w-full max-w-sm justify-between">
-              <span className="text-muted-foreground">Shipping</span>
-              <span>${totals.shipping.toFixed(2)}</span>
-            </div>
-            <div className="flex w-full max-w-sm justify-between">
-              <span className="text-muted-foreground">Tax</span>
-              <span>${totals.tax.toFixed(2)}</span>
-            </div>
-            <div className="my-2 h-px w-full max-w-sm bg-border" />
-            <div className="flex w-full max-w-sm justify-between text-base font-semibold">
-              <span>Total</span>
-              <span>${totals.total.toFixed(2)}</span>
-            </div>
-          </div>
+          )}
 
           <div className="mt-8 text-xs text-muted-foreground">
             <p>Thank you for your purchase.</p>
@@ -340,7 +232,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         }
       }
 
-      await print(<InvoiceDocument order={order} settings={settingsMap} />);
+      await print(<InvoiceDocument order={order} settings={settingsMap} totals={pricingTotals} />);
     } catch (e: any) {
       toast.error(e?.message || "Failed to prepare invoice");
     } finally {
@@ -358,75 +250,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
     return <div className="text-sm text-muted-foreground">Order not found</div>;
   }
 
-  const discountLines: any[] = Array.isArray(order?.discounts)
-    ? order.discounts
-    : Number(order?.discount || 0) > 0
-      ? [{ id: "order-discount", code: null, amount: Number(order?.discount || 0) }]
-      : [];
-
-  const promotionNames = discountLines
-    .filter((d: any) => Number(d?.amount ?? 0) === 0)
-    .filter((d: any) => {
-      if (String(d?.type || "") === "free_shipping") return false;
-      const md: any = d?.metadata || null;
-      return (
-        (md?.kind === "offer" && md?.offerKind === "standard") ||
-        (md?.kind === "deal" && (md?.offerKind === "bxgy_generic" || md?.offerKind === "bxgy_bundle"))
-      );
-    })
-    .map((d: any) => d?.name || d?.discountName || d?.code || "")
-    .filter(Boolean)
-    .join(" • ");
-
-  const monetaryDiscountLines = discountLines.filter((d: any) => Number(d?.amount ?? 0) > 0);
-
-  const promotionSavings = (() => {
-    if (!Array.isArray(order?.items)) return 0;
-    let sum = 0;
-    for (const it of order.items as any[]) {
-      const qty = Number(it?.quantity || 0);
-      if (!Number.isFinite(qty) || qty <= 0) continue;
-      const unit = Number(it?.price ?? 0);
-      const total = Number(it?.total ?? 0);
-      const isGift = unit === 0 && total === 0;
-      const base = Number(it?.referencePrice ?? 0);
-      if (!Number.isFinite(base) || base <= 0) continue;
-
-      if (isGift) {
-        sum += base * qty;
-        continue;
-      }
-
-      if (Number.isFinite(unit) && unit > 0 && unit < base) {
-        sum += (base - unit) * qty;
-      }
-    }
-    return Math.max(0, Number(sum.toFixed(2)));
-  })();
-
-  const saleSavings = (() => {
-    if (!Array.isArray(order?.items)) return 0;
-    let sum = 0;
-    for (const it of order.items as any[]) {
-      const qty = Number(it?.quantity || 0);
-      if (!Number.isFinite(qty) || qty <= 0) continue;
-      const unit = Number(it?.price ?? 0);
-      const total = Number(it?.total ?? 0);
-      const isGift = unit === 0 && total === 0;
-      if (isGift) continue;
-      const base = Number(it?.referencePrice ?? 0);
-      const compareAt = Number(it?.compareAtPrice ?? 0);
-      if (!Number.isFinite(base) || base <= 0) continue;
-      if (!Number.isFinite(compareAt) || compareAt <= base) continue;
-      sum += (compareAt - base) * qty;
-    }
-    return Math.max(0, Number(sum.toFixed(2)));
-  })();
-
-  const displaySubtotal =
-    Number(order.subtotal || 0) +
-    (Number.isFinite(promotionSavings) ? promotionSavings : 0) +
-    (Number.isFinite(saleSavings) ? saleSavings : 0);
+  const items = Array.isArray(order?.items) ? order.items : [];
 
   return (
     <div className="space-y-6">
@@ -462,6 +286,18 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         </div>
       </div>
 
+      {/* Savings callout */}
+      {pricingTotals && pricingTotals.totalDiscounts > 0 && (
+        <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+          <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
+            <Tag className="h-4 w-4" />
+            <span className="font-medium">
+              You saved {formatCurrency(pricingTotals.totalDiscounts, { currency: "CAD", locale: "en-CA" })} on this order!
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Order Items */}
       <Card>
         <CardHeader>
@@ -478,11 +314,11 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
             >
               {itemsExpanded ? (
                 <>
-                  <ChevronUp className="mr-1 h-4 w-4" /> Hide items ({order.items.length})
+                  <ChevronUp className="mr-1 h-4 w-4" /> Hide items ({items.length})
                 </>
               ) : (
                 <>
-                  <ChevronDown className="mr-1 h-4 w-4" /> Show items ({order.items.length})
+                  <ChevronDown className="mr-1 h-4 w-4" /> Show items ({items.length})
                 </>
               )}
             </Button>
@@ -491,112 +327,96 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
         <CardContent>
           {itemsExpanded && (
             <>
-              <div className="space-y-4">
-                {order.items.map((item: any) => (
-                  (() => {
-                    const isGift = Number(item.price ?? 0) === 0 && Number(item.total ?? 0) === 0;
-                    const unit = Number(item.price ?? 0);
-                    const qty = Number(item.quantity ?? 0);
-                    const compareAt = Number(item.compareAtPrice ?? 0);
-                    const hasCompareAt = Number.isFinite(compareAt) && compareAt > 0 && compareAt > unit;
-                    return (
-                  <div key={item.id} className="flex gap-4">
-                    <Link href={item.productSlug ? `/product/${item.productSlug}` : item.productId ? `/product/${item.productId}` : "#"} className="relative h-20 w-20 rounded bg-muted flex-shrink-0">
-                      <Image
-                        src={item.image}
-                        alt={item.name}
-                        fill
-                        className="object-cover rounded"
-                        sizes="80px"
-                      />
-                    </Link>
-                    <div className="flex-1 min-w-0">
-                      <Link href={item.productSlug ? `/product/${item.productSlug}` : item.productId ? `/product/${item.productId}` : "#"} className="font-semibold hover:underline">
-                        {item.name}
+              <div className="space-y-4 mb-6">
+                {items.map((item: any) => {
+                  const isGift = Number(item.price ?? 0) === 0 && Number(item.total ?? 0) === 0;
+                  const unit = Number(item.price ?? 0);
+                  const qty = Number(item.quantity ?? 0);
+                  const total = Number(item.total ?? 0);
+                  const compareAt = Number(item.compareAtPrice ?? 0);
+                  const ref = Number(item.referencePrice ?? unit);
+                  const hasCompareAt = compareAt > 0 && compareAt > unit;
+                  const hasPromo = ref > unit && unit > 0;
+
+                  return (
+                    <div key={item.id} className="flex gap-4">
+                      <Link href={item.productSlug ? `/product/${item.productSlug}` : item.productId ? `/product/${item.productId}` : "#"} className="relative h-20 w-20 rounded bg-muted flex-shrink-0">
+                        <Image
+                          src={item.image || "/placeholder-product.jpg"}
+                          alt={item.name}
+                          fill
+                          className="object-cover rounded"
+                          sizes="80px"
+                        />
                       </Link>
-                      {isGift ? (
-                        <p className="text-xs font-medium text-green-700 dark:text-green-300 mt-1">Free gift</p>
-                      ) : null}
-                      <p className="text-sm text-muted-foreground">
-                        {item.variant || ""}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        SKU: {item.sku}
-                      </p>
-                      <p className="text-sm mt-1">
-                        Qty: {item.quantity} ×{" "}
-                        {isGift ? (
-                          "FREE"
-                        ) : (
-                          <span className="inline-flex flex-col items-start leading-tight">
-                            {hasCompareAt ? (
-                              <span className="text-xs text-muted-foreground line-through">${compareAt.toFixed(2)}</span>
-                            ) : null}
-                            <span>${unit.toFixed(2)}</span>
-                          </span>
+                      <div className="flex-1 min-w-0">
+                        <Link href={item.productSlug ? `/product/${item.productSlug}` : item.productId ? `/product/${item.productId}` : "#"} className="font-semibold hover:underline">
+                          {item.name}
+                        </Link>
+                        {isGift && (
+                          <PromotionBadge type="gift" size="sm" className="mt-1" />
                         )}
-                      </p>
+                        {item.promotionName && !isGift && (
+                          <PromotionBadge type="promotion" label={item.promotionName} size="sm" className="mt-1" />
+                        )}
+                        <p className="text-sm text-muted-foreground">
+                          {item.variant || ""}
+                        </p>
+                        {item.sku && (
+                          <p className="text-sm text-muted-foreground">
+                            SKU: {item.sku}
+                          </p>
+                        )}
+                        <p className="text-sm mt-1">
+                          Qty: {qty} ×{" "}
+                          {isGift ? (
+                            <span className="text-green-600 dark:text-green-400">FREE</span>
+                          ) : (
+                            <span className="inline-flex flex-col items-start leading-tight">
+                              {hasCompareAt && (
+                                <span className="text-xs text-muted-foreground line-through">${compareAt.toFixed(2)}</span>
+                              )}
+                              <span>${unit.toFixed(2)}</span>
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        {isGift ? (
+                          <>
+                            {ref > 0 && (
+                              <p className="text-xs text-muted-foreground line-through">${(ref * qty).toFixed(2)}</p>
+                            )}
+                            <p className="font-semibold text-green-600 dark:text-green-400">FREE</p>
+                          </>
+                        ) : (
+                          <div className="flex flex-col items-end leading-tight">
+                            {hasCompareAt && (
+                              <span className="text-xs text-muted-foreground line-through">${(compareAt * qty).toFixed(2)}</span>
+                            )}
+                            {hasPromo && !hasCompareAt && (
+                              <span className="text-xs text-muted-foreground line-through">${(ref * qty).toFixed(2)}</span>
+                            )}
+                            <p className="font-semibold">${total.toFixed(2)}</p>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-right">
-                      {isGift ? (
-                        <p className="font-semibold text-green-700 dark:text-green-300">FREE</p>
-                      ) : (
-                        <div className="flex flex-col items-end leading-tight">
-                          {hasCompareAt ? (
-                            <span className="text-xs text-muted-foreground line-through">${(compareAt * qty).toFixed(2)}</span>
-                          ) : null}
-                          <p className="font-semibold">${Number(item.total ?? 0).toFixed(2)}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                    );
-                  })()
-                ))}
+                  );
+                })}
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span>${displaySubtotal.toFixed(2)}</span>
-              </div>
-              {saleSavings > 0 ? (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Sale savings</span>
-                  <span>-${saleSavings.toFixed(2)}</span>
+
+              {/* Price Summary using unified component */}
+              {pricingTotals && (
+                <div className="border-t pt-4">
+                  <PriceSummary
+                    totals={pricingTotals}
+                    showDetails={true}
+                    showBeforeDiscounts={true}
+                    showTotalDiscounts={true}
+                  />
                 </div>
-              ) : null}
-              {promotionSavings > 0 ? (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Promotion{promotionNames ? ` (${promotionNames})` : ""}</span>
-                  <span>-${promotionSavings.toFixed(2)}</span>
-                </div>
-              ) : promotionNames ? (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Promotion ({promotionNames})</span>
-                  <span>—</span>
-                </div>
-              ) : null}
-              {monetaryDiscountLines.map((d: any) => (
-                <div key={String(d.id)} className="flex justify-between">
-                  <span className="text-muted-foreground">
-                    Discount
-                    {d?.code ? ` (${String(d.code)})` : d?.name ? ` (${String(d.name)})` : ""}
-                  </span>
-                  <span>-${Number(d?.amount || 0).toFixed(2)}</span>
-                </div>
-              ))}
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Shipping</span>
-                <span>${Number(order.shipping || 0).toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Tax</span>
-                <span>${order.tax.toFixed(2)}</span>
-              </div>
-              <Separator className="my-2" />
-              <div className="flex justify-between text-base font-semibold">
-                <span>Total</span>
-                <span>${order.total.toFixed(2)}</span>
-              </div>
+              )}
             </>
           )}
         </CardContent>
@@ -614,7 +434,7 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
           <CardContent className="text-sm space-y-1">
             {order.shippingAddress ? (
               <>
-                <p className="font-medium">{order.shippingAddress.name}</p>
+                <p className="font-medium">{order.shippingAddress.name || `${order.shippingAddress.firstName} ${order.shippingAddress.lastName}`.trim()}</p>
                 <p>{order.shippingAddress.addressLine1}</p>
                 {order.shippingAddress.addressLine2 && (
                   <p>{order.shippingAddress.addressLine2}</p>
@@ -641,11 +461,11 @@ export default function OrderDetailPage({ params }: { params: Promise<{ id: stri
           </CardHeader>
           <CardContent className="text-sm">
             <p className="capitalize">
-              {order.paymentMethod === "cash_on_delivery"
+              {order.paymentMethod === "cash_on_delivery" || order.paymentMethod === "cod"
                 ? "Cash on Delivery"
-                : order.paymentMethod === "credit_card"
-                ? "Credit/Debit Card"
-                : order.paymentMethod || "Payment"}
+                : order.paymentMethod === "credit_card" || order.paymentMethod === "card"
+                  ? "Credit/Debit Card"
+                  : order.paymentMethod || "Payment"}
             </p>
             <StatusBadge type="payment" status={order.paymentStatus} className="mt-2" />
           </CardContent>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,13 +11,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Package, Eye, Download, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from "lucide-react";
+import { Package, Eye, Download, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Tag } from "lucide-react";
 import Image from "next/image";
 import { LocalDate } from "@/components/common/local-datetime";
 import { usePrint } from "@/components/common/print/print-provider";
 import { siteConfig } from "@/config/site";
 import { toast } from "sonner";
 import { StatusBadge } from "@/components/common/status-badge";
+import { computeOrderTotals, normalizeOrderData } from "@/lib/pricing";
+import { InvoicePriceSummary, PromotionBadge } from "@/components/shared/pricing";
+import { formatCurrency } from "@/lib/utils";
 
 export default function OrdersPage() {
   const { print, isPrinting } = usePrint();
@@ -107,12 +110,11 @@ export default function OrdersPage() {
   function InvoiceDocument({ order, settings }: { order: any; settings: Record<string, string> | null }) {
     const siteName = settings?.site_name || siteConfig.name || "";
     const seller = getSeller(settings);
-    const totals = {
-      subtotal: Number(order?.subtotal || 0),
-      shipping: Number(order?.shipping || 0),
-      tax: Number(order?.tax || 0),
-      total: Number(order?.total || 0),
-    };
+    const items = Array.isArray(order?.items) ? order.items : [];
+
+    // Use unified pricing logic
+    const normalized = normalizeOrderData(order);
+    const totals = computeOrderTotals(normalized);
 
     return (
       <div className="invoice-print-root mx-auto max-w-4xl p-6 print:p-0">
@@ -144,7 +146,7 @@ export default function OrdersPage() {
               <div className="text-sm leading-6">
                 {order?.shippingAddress ? (
                   <>
-                    <div>{order.shippingAddress.name}</div>
+                    <div>{order.shippingAddress.name || `${order.shippingAddress.firstName} ${order.shippingAddress.lastName}`.trim()}</div>
                     <div>{order.shippingAddress.addressLine1}</div>
                     {order.shippingAddress.addressLine2 && <div>{order.shippingAddress.addressLine2}</div>}
                     <div>
@@ -173,46 +175,62 @@ export default function OrdersPage() {
 
           <div className="my-6 h-px w-full bg-border" />
 
+          {/* Items table with promotion info */}
           <div className="rounded-md border">
             <div className="grid grid-cols-12 gap-2 border-b p-2 text-xs text-muted-foreground">
-              <div className="col-span-7">Item</div>
-              <div className="col-span-2 text-right">Qty</div>
-              <div className="col-span-1 text-right">Price</div>
-              <div className="col-span-2 text-right">Total</div>
+              <div className="col-span-5">Item</div>
+              <div className="col-span-2 text-center">Qty</div>
+              <div className="col-span-2 text-right">Unit Price</div>
+              <div className="col-span-3 text-right">Total</div>
             </div>
-            {Array.isArray(order?.items) &&
-              order.items.map((it: any) => (
-                <div key={it.id} className="grid grid-cols-12 gap-2 p-2 text-sm">
-                  <div className="col-span-7">
+            {items.map((it: any) => {
+              const isGift = Number(it.price ?? 0) === 0 && Number(it.total ?? 0) === 0;
+              const qty = Number(it.quantity ?? 0);
+              const unit = Number(it.price ?? 0);
+              const total = Number(it.total ?? 0);
+              const compareAt = Number(it.compareAtPrice ?? 0);
+              const hasCompareAt = compareAt > 0 && compareAt > unit;
+
+              return (
+                <div key={it.id} className="grid grid-cols-12 gap-2 p-2 text-sm border-b last:border-b-0">
+                  <div className="col-span-5">
                     <div className="font-medium">{it.name}</div>
+                    {isGift && <div className="text-xs font-medium text-green-700 dark:text-green-300">Free gift</div>}
+                    {it.promotionName && !isGift && (
+                      <div className="text-xs font-medium text-green-700 dark:text-green-300">{it.promotionName}</div>
+                    )}
                     {it.variant && <div className="text-xs text-muted-foreground">{it.variant}</div>}
                     {it.sku && <div className="text-xs text-muted-foreground">SKU: {it.sku}</div>}
                   </div>
-                  <div className="col-span-2 text-right">{it.quantity}</div>
-                  <div className="col-span-1 text-right">${Number(it.price).toFixed(2)}</div>
-                  <div className="col-span-2 text-right">${Number(it.total).toFixed(2)}</div>
+                  <div className="col-span-2 text-center">{qty}</div>
+                  <div className="col-span-2 text-right">
+                    {isGift ? (
+                      "FREE"
+                    ) : (
+                      <div className="flex flex-col items-end leading-tight">
+                        {hasCompareAt && <span className="text-xs text-muted-foreground line-through">${compareAt.toFixed(2)}</span>}
+                        <span>${unit.toFixed(2)}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="col-span-3 text-right">
+                    {isGift ? (
+                      "FREE"
+                    ) : (
+                      <div className="flex flex-col items-end leading-tight">
+                        {hasCompareAt && <span className="text-xs text-muted-foreground line-through">${(compareAt * qty).toFixed(2)}</span>}
+                        <span>${total.toFixed(2)}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              ))}
+              );
+            })}
           </div>
 
-          <div className="mt-6 flex flex-col items-end gap-1 text-sm">
-            <div className="flex w-full max-w-sm justify-between">
-              <span className="text-muted-foreground">Subtotal</span>
-              <span>${totals.subtotal.toFixed(2)}</span>
-            </div>
-            <div className="flex w-full max-w-sm justify-between">
-              <span className="text-muted-foreground">Shipping</span>
-              <span>${totals.shipping.toFixed(2)}</span>
-            </div>
-            <div className="flex w-full max-w-sm justify-between">
-              <span className="text-muted-foreground">Tax</span>
-              <span>${totals.tax.toFixed(2)}</span>
-            </div>
-            <div className="my-2 h-px w-full max-w-sm bg-border" />
-            <div className="flex w-full max-w-sm justify-between text-base font-semibold">
-              <span>Total</span>
-              <span>${totals.total.toFixed(2)}</span>
-            </div>
+          {/* Use unified InvoicePriceSummary component */}
+          <div className="mt-6">
+            <InvoicePriceSummary totals={totals} />
           </div>
 
           <div className="mt-8 text-xs text-muted-foreground">
@@ -299,7 +317,7 @@ export default function OrdersPage() {
                 <div className="flex items-center gap-3">
                   <StatusBadge type="order" status={order.status} />
                   <span className="text-lg font-bold">
-                    ${order.total.toFixed(2)}
+                    {formatCurrency(order.total, { currency: "CAD", locale: "en-CA" })}
                   </span>
                 </div>
               </div>
@@ -327,23 +345,34 @@ export default function OrdersPage() {
               {/* Order Items */}
               {expanded[order.id] && (
                 <div className="space-y-3 mb-4">
-                  {order.items.map((item, idx) => (
-                    <div key={idx} className="flex gap-4">
-                      <div className="relative h-16 w-16 rounded bg-muted flex-shrink-0">
-                        <Image src={item.image || "/placeholder-product.jpg"} alt={item.name} fill className="object-cover rounded" sizes="64px" />
+                  {order.items.map((item, idx) => {
+                    const isGift = Number((item as any).price ?? 0) === 0 && Number((item as any).total ?? 0) === 0;
+                    return (
+                      <div key={idx} className="flex gap-4">
+                        <div className="relative h-16 w-16 rounded bg-muted flex-shrink-0">
+                          <Image src={item.image || "/placeholder-product.jpg"} alt={item.name} fill className="object-cover rounded" sizes="64px" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{item.name}</p>
+                          {isGift && (
+                            <PromotionBadge type="gift" size="sm" className="mt-0.5" />
+                          )}
+                          {(item as any).promotionName && !isGift && (
+                            <PromotionBadge type="promotion" label={(item as any).promotionName} size="sm" className="mt-0.5" />
+                          )}
+                          <p className="text-sm text-muted-foreground">
+                            Qty: {item.quantity} × {isGift ? (
+                              <span className="text-green-600 dark:text-green-400">FREE</span>
+                            ) : (
+                              formatCurrency(item.price, { currency: "CAD", locale: "en-CA" })
+                            )}
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{item.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          Qty: {item.quantity} × ${item.price.toFixed(2)}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
-
-              {/* Tracking info can be loaded from /api/storefront/orders/[id]/tracking if needed */}
 
               {/* Actions */}
               <div className="flex flex-wrap gap-2">
@@ -375,6 +404,29 @@ export default function OrdersPage() {
           </Card>
         ))}
       </div>
+
+      {/* Pagination */}
+      {(page > 1 || hasMore) && (
+        <div className="flex items-center justify-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page <= 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
+            <ChevronLeft className="h-4 w-4 mr-1" /> Previous
+          </Button>
+          <span className="text-sm text-muted-foreground">Page {page}</span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!hasMore}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Next <ChevronRight className="h-4 w-4 ml-1" />
+          </Button>
+        </div>
+      )}
 
       {/* Empty State */}
       {filteredOrders.length === 0 && (
