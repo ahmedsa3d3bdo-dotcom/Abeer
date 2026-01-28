@@ -1,8 +1,11 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { Tag, Percent, Gift, Ticket } from "lucide-react";
+import { Tag, Percent, Gift, Ticket, Package } from "lucide-react";
 
+/**
+ * Promotion badge types for visual distinction
+ */
 export type PromotionType = "sale" | "promotion" | "deal" | "coupon" | "bxgy" | "gift" | "bundle";
 
 interface PromotionBadgeProps {
@@ -13,11 +16,15 @@ interface PromotionBadgeProps {
     size?: "sm" | "md";
 }
 
+/**
+ * Color and icon configuration for each promotion type
+ * Using professional, distinct colors for each category
+ */
 const typeConfig: Record<PromotionType, { icon: typeof Tag; defaultLabel: string; color: string }> = {
     sale: {
         icon: Percent,
         defaultLabel: "Sale",
-        color: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300",
+        color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
     },
     promotion: {
         icon: Tag,
@@ -25,7 +32,7 @@ const typeConfig: Record<PromotionType, { icon: typeof Tag; defaultLabel: string
         color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300",
     },
     deal: {
-        icon: Tag,
+        icon: Gift,
         defaultLabel: "Deal",
         color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
     },
@@ -45,12 +52,16 @@ const typeConfig: Record<PromotionType, { icon: typeof Tag; defaultLabel: string
         color: "bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300",
     },
     bundle: {
-        icon: Tag,
+        icon: Package,
         defaultLabel: "Bundle",
         color: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300",
     },
 };
 
+/**
+ * Displays a professional promotion/discount badge
+ * Used inline with products to show applied promotions
+ */
 export function PromotionBadge({ type, label, code, className, size = "sm" }: PromotionBadgeProps) {
     const config = typeConfig[type] || typeConfig.promotion;
     const Icon = config.icon;
@@ -74,16 +85,38 @@ export function PromotionBadge({ type, label, code, className, size = "sm" }: Pr
 
 /**
  * Determines the appropriate promotion type from metadata
+ * Used to select the correct badge styling
  */
 export function getPromotionType(metadata?: { kind?: string; offerKind?: string } | null): PromotionType {
     if (!metadata) return "promotion";
 
     const { kind, offerKind } = metadata;
 
-    if (offerKind === "bxgy_generic" || offerKind === "bxgy_bundle") return "bxgy";
-    if (offerKind === "bundle") return "bundle";
+    // BXGY deals get special purple badge
+    if (offerKind === "bxgy_generic") return "bxgy";
+    if (offerKind === "bxgy_bundle") return "bundle";
+
+    // Other deals
     if (kind === "deal") return "deal";
+
+    // Standard offers
     if (kind === "offer") return "promotion";
 
     return "promotion";
+}
+
+/**
+ * Creates a professional BXGY label from metadata
+ * Examples: "Buy 2 Get 1", "Buy 1 Get 1"
+ */
+export function getBxgyLabel(metadata?: { bxgy?: { buyQty?: number; getQty?: number } } | null, name?: string | null): string {
+    const buyQty = metadata?.bxgy?.buyQty || 0;
+    const getQty = metadata?.bxgy?.getQty || 0;
+
+    if (buyQty > 0 && getQty > 0) {
+        const label = `Buy ${buyQty} Get ${getQty}`;
+        return name ? `${label} • ${name}` : label;
+    }
+
+    return name || "Buy X Get Y";
 }

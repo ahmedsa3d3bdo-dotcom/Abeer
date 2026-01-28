@@ -7,14 +7,26 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useCartStore } from "@/stores/cart.store";
-import { ShoppingCart, Tag, Loader2 } from "lucide-react";
+import { ShoppingCart, Tag, Loader2, X } from "lucide-react";
 import type { Cart } from "@/types/storefront";
 import { computeCartTotals } from "@/components/storefront/cart/cart-pricing";
+import { getDiscountLabel, classifyDiscount } from "@/lib/pricing";
+import { formatCurrency } from "@/lib/utils";
 
 interface CartSummaryProps {
   cart: Cart;
 }
 
+/**
+ * Order summary component for the cart page
+ * 
+ * Displays:
+ * - Discount code input with apply/remove functionality
+ * - Applied discounts with professional labeling
+ * - Price breakdown (subtotal, savings, discounts, shipping, tax)
+ * - Total before/after discounts
+ * - Checkout button
+ */
 export function CartSummary({ cart }: CartSummaryProps) {
   const [discountCode, setDiscountCode] = useState("");
   const [isApplyingDiscount, setIsApplyingDiscount] = useState(false);
@@ -23,6 +35,7 @@ export function CartSummary({ cart }: CartSummaryProps) {
   const cartError = useCartStore((state) => state.error);
 
   const totals = computeCartTotals(cart);
+  const fmt = (value: number) => formatCurrency(value, { currency: "CAD", locale: "en-CA" });
 
   const handleApplyDiscount = async () => {
     if (!discountCode.trim()) return;
@@ -47,11 +60,30 @@ export function CartSummary({ cart }: CartSummaryProps) {
     }
   };
 
+  // Helper to get professional label for applied discount
+  const getAppliedDiscountLabel = (discount: any) => {
+    const type = classifyDiscount({
+      code: discount.code,
+      isAutomatic: discount.isAutomatic,
+      metadata: discount.metadata || discount.discountMetadata,
+    });
+
+    return getDiscountLabel({
+      id: discount.id,
+      type,
+      code: discount.code,
+      name: discount.discountName || discount.name,
+      amount: Number(discount.amount ?? 0),
+      isAutomatic: Boolean(discount.isAutomatic),
+      metadata: discount.metadata || discount.discountMetadata,
+    });
+  };
+
   return (
     <div className="border rounded-lg p-6 sticky top-4">
       <h2 className="text-lg font-semibold mb-4">Order Summary</h2>
 
-      {/* Discount Code */}
+      {/* Discount Code Input */}
       <div className="mb-6">
         <Label htmlFor="discount-code" className="mb-2 block text-sm">
           Discount Code
@@ -78,9 +110,9 @@ export function CartSummary({ cart }: CartSummaryProps) {
           </Button>
         </div>
 
-      {cartError && (
-        <p className="-mt-4 mb-6 text-xs text-destructive">{cartError}</p>
-      )}
+        {cartError && (
+          <p className="mt-2 text-xs text-destructive">{cartError}</p>
+        )}
       </div>
 
       {/* Applied Discounts */}
@@ -91,19 +123,26 @@ export function CartSummary({ cart }: CartSummaryProps) {
               key={discount.id}
               className="flex items-center gap-2 text-sm bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300 p-2 rounded"
             >
-              <Tag className="h-3 w-3" />
-              <span className="flex-1 font-medium">{discount.code}</span>
-              {Number(discount.amount ?? 0) === 0 ? <span>FREE</span> : <span>-${discount.amount.toFixed(2)}</span>}
+              <Tag className="h-3 w-3 flex-shrink-0" />
+              <span className="flex-1 font-medium truncate">
+                {getAppliedDiscountLabel(discount)}
+              </span>
+              {Number(discount.amount ?? 0) === 0 ? (
+                <span className="text-xs">Applied</span>
+              ) : (
+                <span>-{fmt(discount.amount)}</span>
+              )}
               {!discount.isAutomatic && (
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-7 px-2 text-green-700 hover:text-green-800 dark:text-green-300"
+                  className="h-6 w-6 p-0 text-green-700 hover:text-green-800 dark:text-green-300"
                   onClick={handleRemoveDiscount}
                   disabled={isApplyingDiscount}
                 >
-                  Remove
+                  <X className="h-3 w-3" />
+                  <span className="sr-only">Remove</span>
                 </Button>
               )}
             </div>
@@ -117,73 +156,86 @@ export function CartSummary({ cart }: CartSummaryProps) {
       <div className="space-y-3 text-sm">
         <div className="flex justify-between">
           <span className="text-muted-foreground">Subtotal</span>
-          <span>${totals.displaySubtotal.toFixed(2)}</span>
+          <span>{fmt(totals.displaySubtotal)}</span>
         </div>
 
-        {totals.saleSavings > 0 ? (
+        {totals.saleSavings > 0 && (
           <div className="flex justify-between">
             <span className="text-muted-foreground">Sale savings</span>
-            <span>-${totals.saleSavings.toFixed(2)}</span>
+            <span className="text-green-600 dark:text-green-400">-{fmt(totals.saleSavings)}</span>
           </div>
-        ) : null}
+        )}
 
-        {totals.promotionSavings > 0 ? (
+        {totals.promotionSavings > 0 && (
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Promotion savings</span>
-            <span>-${totals.promotionSavings.toFixed(2)}</span>
+            <span className="text-muted-foreground">
+              Promotion savings
+              {totals.promotionNames.length > 0 && (
+                <span className="ml-1 text-xs">({totals.promotionNames.join(" • ")})</span>
+              )}
+            </span>
+            <span className="text-green-600 dark:text-green-400">-{fmt(totals.promotionSavings)}</span>
           </div>
-        ) : null}
+        )}
 
-        {totals.promotionDiscounts.length
-          ? totals.promotionDiscounts.map((d) => (
-              <div key={d.id} className="flex justify-between">
-                <span className="text-muted-foreground">Promotion{d.code ? ` (${d.code})` : ""}</span>
-                {Number(d.amount ?? 0) === 0 ? <span>FREE</span> : <span>-${d.amount.toFixed(2)}</span>}
-              </div>
-            ))
-          : null}
+        {/* Promotion discounts (BXGY, scheduled offers with monetary value) */}
+        {totals.promotionDiscounts.map((d) =>
+          d.amount > 0 ? (
+            <div key={d.id} className="flex justify-between">
+              <span className="text-green-600 dark:text-green-400">{getDiscountLabel(d)}</span>
+              <span className="text-green-600 dark:text-green-400">-{fmt(d.amount)}</span>
+            </div>
+          ) : null,
+        )}
 
-        {totals.couponDiscounts.length
-          ? totals.couponDiscounts.map((d) => (
-              <div key={d.id} className="flex justify-between text-green-600">
-                <span>Coupon{d.code ? ` (${d.code})` : ""}</span>
-                {Number(d.amount ?? 0) === 0 ? <span>FREE</span> : <span>-${d.amount.toFixed(2)}</span>}
-              </div>
-            ))
-          : null}
+        {/* Coupon discounts */}
+        {totals.couponDiscounts.map((d) => (
+          <div key={d.id} className="flex justify-between text-green-600 dark:text-green-400">
+            <span>{getDiscountLabel(d)}</span>
+            <span>{Number(d.amount ?? 0) === 0 ? "Applied" : `-${fmt(d.amount)}`}</span>
+          </div>
+        ))}
 
-        {totals.otherDiscount > 0 ? (
-          <div className="flex justify-between text-green-600">
+        {/* Other discounts */}
+        {totals.otherDiscount > 0 && (
+          <div className="flex justify-between text-green-600 dark:text-green-400">
             <span>Discount</span>
-            <span>-${totals.otherDiscount.toFixed(2)}</span>
+            <span>-{fmt(totals.otherDiscount)}</span>
           </div>
-        ) : null}
+        )}
 
         <div className="flex justify-between">
           <span className="text-muted-foreground">Shipping</span>
           <span>
             {cart.shippingAmount === 0 ? (
-              <span className="text-green-600">FREE</span>
+              <span className="text-green-600 dark:text-green-400">FREE</span>
             ) : (
-              `$${cart.shippingAmount.toFixed(2)}`
+              fmt(cart.shippingAmount)
             )}
           </span>
         </div>
 
         <div className="flex justify-between">
           <span className="text-muted-foreground">Tax</span>
-          <span>${cart.taxAmount.toFixed(2)}</span>
+          <span>{fmt(cart.taxAmount)}</span>
         </div>
 
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">Total before discounts</span>
-          <span>${totals.totalBeforeDiscounts.toFixed(2)}</span>
-        </div>
+        {/* Total before/after discounts */}
+        {totals.sumAllDiscounts > 0 && (
+          <>
+            <Separator className="my-2" />
 
-        <div className="flex justify-between text-green-600">
-          <span>Sum of all discounts</span>
-          <span>-${totals.sumAllDiscounts.toFixed(2)}</span>
-        </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Total before discounts</span>
+              <span>{fmt(totals.totalBeforeDiscounts)}</span>
+            </div>
+
+            <div className="flex justify-between text-green-600 dark:text-green-400">
+              <span>Total savings</span>
+              <span>-{fmt(totals.sumAllDiscounts)}</span>
+            </div>
+          </>
+        )}
       </div>
 
       <Separator className="my-4" />
@@ -191,7 +243,7 @@ export function CartSummary({ cart }: CartSummaryProps) {
       {/* Total */}
       <div className="flex justify-between text-lg font-semibold mb-6">
         <span>Total</span>
-        <span>${totals.totalAfterDiscounts.toFixed(2)}</span>
+        <span>{fmt(totals.totalAfterDiscounts)}</span>
       </div>
 
       {/* Checkout Button */}
@@ -205,7 +257,7 @@ export function CartSummary({ cart }: CartSummaryProps) {
       {/* Additional Info */}
       <div className="mt-4 space-y-2 text-xs text-muted-foreground">
         <p>• Taxes calculated at checkout</p>
-        <p>• Free shipping applied on all orders </p>
+        <p>• Free shipping on all orders</p>
         <p>• Secure checkout with SSL encryption</p>
       </div>
     </div>

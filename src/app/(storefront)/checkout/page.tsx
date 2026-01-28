@@ -16,6 +16,8 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 import { computeCartTotals } from "@/components/storefront/cart/cart-pricing";
+import { getDiscountLabel } from "@/lib/pricing";
+import { formatCurrency } from "@/lib/utils";
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -86,14 +88,14 @@ export default function CheckoutPage() {
   const handlePlaceOrder = async () => {
     const addressReady = Boolean(
       shippingAddress?.firstName &&
-        shippingAddress?.lastName &&
-        shippingAddress?.addressLine1 &&
-        shippingAddress?.city &&
-        shippingAddress?.state &&
-        shippingAddress?.postalCode &&
-        shippingAddress?.country &&
-        shippingAddress?.phone &&
-        shippingAddress?.email,
+      shippingAddress?.lastName &&
+      shippingAddress?.addressLine1 &&
+      shippingAddress?.city &&
+      shippingAddress?.state &&
+      shippingAddress?.postalCode &&
+      shippingAddress?.country &&
+      shippingAddress?.phone &&
+      shippingAddress?.email,
     );
     const shippingReady = Boolean(shippingMethod?.id);
     const paymentReady = Boolean(paymentMethod?.type);
@@ -115,16 +117,16 @@ export default function CheckoutPage() {
     try {
       const method = shippingMethod
         ? {
-            id: String(shippingMethod.id),
-            name: String(shippingMethod.name),
-            price: Number(shippingMethod.price) || 0,
-            description: shippingMethod.description ?? undefined,
-            estimatedDays:
-              shippingMethod.estimatedDays !== undefined && shippingMethod.estimatedDays !== null
-                ? Number(shippingMethod.estimatedDays)
-                : undefined,
-            carrier: shippingMethod.carrier ?? undefined,
-          }
+          id: String(shippingMethod.id),
+          name: String(shippingMethod.name),
+          price: Number(shippingMethod.price) || 0,
+          description: shippingMethod.description ?? undefined,
+          estimatedDays:
+            shippingMethod.estimatedDays !== undefined && shippingMethod.estimatedDays !== null
+              ? Number(shippingMethod.estimatedDays)
+              : undefined,
+          carrier: shippingMethod.carrier ?? undefined,
+        }
         : null;
 
       const res = await fetch("/api/storefront/orders", {
@@ -152,7 +154,7 @@ export default function CheckoutPage() {
         try {
           await fetch("/api/storefront/buy-now/restore", { method: "POST" });
           await fetchCart();
-        } catch {}
+        } catch { }
       }
       const orderId = data.data?.id || data.data?.orderNumber;
       toast.success("Order placed successfully");
@@ -175,14 +177,14 @@ export default function CheckoutPage() {
 
   const addressReady = Boolean(
     shippingAddress?.firstName &&
-      shippingAddress?.lastName &&
-      shippingAddress?.addressLine1 &&
-      shippingAddress?.city &&
-      shippingAddress?.state &&
-      shippingAddress?.postalCode &&
-      shippingAddress?.country &&
-      shippingAddress?.phone &&
-      shippingAddress?.email,
+    shippingAddress?.lastName &&
+    shippingAddress?.addressLine1 &&
+    shippingAddress?.city &&
+    shippingAddress?.state &&
+    shippingAddress?.postalCode &&
+    shippingAddress?.country &&
+    shippingAddress?.phone &&
+    shippingAddress?.email,
   );
   const shippingReady = Boolean(shippingMethod?.id);
   const paymentReady = Boolean(paymentMethod?.type);
@@ -206,7 +208,7 @@ export default function CheckoutPage() {
             try {
               await fetch("/api/storefront/buy-now/restore", { method: "POST" });
               await fetchCart();
-            } catch {}
+            } catch { }
             router.push("/cart");
           }}
         >
@@ -240,7 +242,7 @@ export default function CheckoutPage() {
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify(data),
                     });
-                  } catch {}
+                  } catch { }
                 })();
                 setCurrentStep("shipping-method");
               }}
@@ -306,7 +308,7 @@ export default function CheckoutPage() {
                       try {
                         await removeDiscount();
                         toast.success("Discount removed");
-                      } catch {}
+                      } catch { }
                       setPromoLoading(false);
                     }}
                     disabled={promoLoading}
@@ -323,7 +325,7 @@ export default function CheckoutPage() {
                         await applyDiscount(promoCode);
                         setPromoCode("");
                         toast.success("Discount applied");
-                      } catch {}
+                      } catch { }
                       setPromoLoading(false);
                     }}
                     disabled={!promoCode.trim() || promoLoading}
@@ -363,25 +365,27 @@ export default function CheckoutPage() {
               ) : null}
 
               {totals.promotionDiscounts.length
-                ? totals.promotionDiscounts.map((d) => (
+                ? totals.promotionDiscounts.map((d) =>
+                  d.amount > 0 ? (
                     <div key={d.id} className="flex justify-between">
-                      <span className="text-muted-foreground">Promotion{d.code ? ` (${d.code})` : ""}</span>
-                      {Number(d.amount ?? 0) === 0 ? <span>FREE</span> : <span>-${d.amount.toFixed(2)}</span>}
+                      <span className="text-green-600 dark:text-green-400">{getDiscountLabel(d)}</span>
+                      <span className="text-green-600 dark:text-green-400">-${d.amount.toFixed(2)}</span>
                     </div>
-                  ))
+                  ) : null,
+                )
                 : null}
 
               {totals.couponDiscounts.length
                 ? totals.couponDiscounts.map((d) => (
-                    <div key={d.id} className="flex justify-between text-green-600">
-                      <span>Coupon{d.code ? ` (${d.code})` : ""}</span>
-                      {Number(d.amount ?? 0) === 0 ? <span>FREE</span> : <span>-${d.amount.toFixed(2)}</span>}
-                    </div>
-                  ))
+                  <div key={d.id} className="flex justify-between text-green-600 dark:text-green-400">
+                    <span>{getDiscountLabel(d)}</span>
+                    <span>{Number(d.amount ?? 0) === 0 ? "Applied" : `-$${d.amount.toFixed(2)}`}</span>
+                  </div>
+                ))
                 : null}
 
               {totals.otherDiscount > 0 ? (
-                <div className="flex justify-between text-green-600">
+                <div className="flex justify-between text-green-600 dark:text-green-400">
                   <span>Discount</span>
                   <span>-${totals.otherDiscount.toFixed(2)}</span>
                 </div>
@@ -406,8 +410,8 @@ export default function CheckoutPage() {
                 <span>${totals.totalBeforeDiscounts.toFixed(2)}</span>
               </div>
 
-              <div className="flex justify-between text-green-600">
-                <span>Sum of all discounts</span>
+              <div className="flex justify-between text-green-600 dark:text-green-400">
+                <span>Total savings</span>
                 <span>-${totals.sumAllDiscounts.toFixed(2)}</span>
               </div>
 

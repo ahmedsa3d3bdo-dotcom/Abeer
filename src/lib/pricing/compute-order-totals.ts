@@ -1,9 +1,14 @@
 /**
  * Unified pricing calculation logic for orders and carts.
  * Single source of truth for all discount/promotion calculations.
+ * 
+ * This module ensures consistent pricing display across:
+ * - Customer: Cart, Checkout, Order Confirmation, Order Details, Invoice
+ * - Admin: Order Drawer, Order Invoice, Order Table
  */
 
-import type { ComputeTotalsInput, DiscountLineItem, OrderLineItem, PricingTotals } from "./types";
+import type { ComputeTotalsInput, DiscountLineItem, DiscountType, OrderLineItem, PricingTotals } from "./types";
+import { classifyDiscount, isBxgyDeal } from "./types";
 
 function safeNumber(value: unknown): number {
     const n = Number(value);
@@ -38,6 +43,7 @@ export function getCompareAtPrice(item: OrderLineItem): number {
 
 /**
  * Calculates sale savings (compare-at vs reference price)
+ * This is the "strikethrough" price difference from markdowns
  */
 export function computeSaleSavings(items: OrderLineItem[]): number {
     return items.reduce((sum, item) => {
@@ -59,6 +65,11 @@ export function computeSaleSavings(items: OrderLineItem[]): number {
 /**
  * Calculates promotion savings (reference price vs unit price)
  * Includes gift items valued at their reference price
+ * 
+ * This covers:
+ * - Scheduled offers that reduce unit price
+ * - BXGY deals where items become free/discounted
+ * - Gift items from promotions
  */
 export function computePromotionSavings(items: OrderLineItem[]): { savings: number; names: string[] } {
     const names: string[] = [];
@@ -95,7 +106,10 @@ export function computePromotionSavings(items: OrderLineItem[]): { savings: numb
 }
 
 /**
- * Splits applied discounts into categories
+ * Splits applied discounts into categories:
+ * - Promotions: Automatic discounts (BXGY deals, scheduled offers)
+ * - Coupons: Customer-entered discount codes
+ * - Other: Unclassified discounts
  */
 export function splitAppliedDiscounts(discounts: DiscountLineItem[] | undefined) {
     const promotionDiscounts: DiscountLineItem[] = [];
@@ -103,9 +117,16 @@ export function splitAppliedDiscounts(discounts: DiscountLineItem[] | undefined)
     const otherDiscounts: DiscountLineItem[] = [];
 
     for (const d of discounts || []) {
-        if (d.type === "coupon" || (!d.isAutomatic && d.code)) {
+        // Use the centralized classification logic
+        const actualType = classifyDiscount({
+            code: d.code,
+            isAutomatic: d.isAutomatic,
+            metadata: d.metadata,
+        });
+
+        if (actualType === "coupon") {
             couponDiscounts.push(d);
-        } else if (d.type === "promotion" || d.type === "deal" || d.isAutomatic) {
+        } else if (actualType === "promotion" || actualType === "deal") {
             promotionDiscounts.push(d);
         } else {
             otherDiscounts.push(d);
@@ -128,20 +149,22 @@ export function splitAppliedDiscounts(discounts: DiscountLineItem[] | undefined)
 
 /**
  * Extracts promotion names from discount lines (for non-monetary displays)
+ * Used to show promotion names in the pricing summary
  */
 export function extractPromotionNames(discounts: DiscountLineItem[] | undefined): string[] {
     const names: string[] = [];
 
     for (const d of discounts || []) {
-        // Skip coupons
-        if (d.type === "coupon" || (!d.isAutomatic && d.code)) continue;
+        // Skip coupons - they have their own display
+        if (d.type === "coupon") continue;
 
-        // Only include promotion/deal types
+        // Skip if no metadata indicating a promotion/deal
         const md = d.metadata;
         if (!md) continue;
 
-        const isOffer = md.kind === "offer" && md.offerKind === "standard";
-        const isDeal = md.kind === "deal" && (md.offerKind === "bxgy_generic" || md.offerKind === "bxgy_bundle");
+        // Include offers and deals
+        const isOffer = md.kind === "offer";
+        const isDeal = md.kind === "deal" || md.offerKind === "bxgy_generic" || md.offerKind === "bxgy_bundle";
 
         if (isOffer || isDeal) {
             const name = d.name?.trim();
@@ -156,6 +179,15 @@ export function extractPromotionNames(discounts: DiscountLineItem[] | undefined)
 
 /**
  * Main function to compute all pricing totals
+ * 
+ * Returns a comprehensive breakdown of:
+ * - Display subtotal (what items would cost without discounts)
+ * - Sale savings (compare-at reductions)
+ * - Promotion savings (offer/deal reductions at line level)
+ * - Promotion discounts (cart-level automatic discounts)
+ * - Coupon discounts (customer-entered codes)
+ * - Shipping and tax
+ * - Totals before/after discounts
  */
 export function computeOrderTotals(input: ComputeTotalsInput): PricingTotals {
     const { items, appliedDiscounts, subtotal, discountAmount, shippingAmount, taxAmount, totalAmount } = input;
@@ -164,7 +196,7 @@ export function computeOrderTotals(input: ComputeTotalsInput): PricingTotals {
     const saleSavings = computeSaleSavings(items);
     const { savings: promotionSavings, names: itemPromotionNames } = computePromotionSavings(items);
 
-    // Split applied discounts
+    // Split applied discounts using centralized logic
     const { promotionDiscounts, couponDiscounts, promotionDiscount, couponDiscount, otherDiscount } =
         splitAppliedDiscounts(appliedDiscounts);
 
@@ -215,8 +247,15 @@ export function computeOrderTotals(input: ComputeTotalsInput): PricingTotals {
 }
 
 /**
- * Convert raw order data to ComputeTotalsInput format
- * Works with both cart and order objects
+ * Convert raw order/cart data to ComputeTotalsInput format
+ * 
+ * This normalizes data from various sources:
+ * - Cart objects (frontend)
+ * - Order objects (API responses)
+ * - Admin order details
+ * 
+ * The key improvement here is using metadata to correctly classify
+ * BXGY deals as promotions (not coupons), even if they have a code.
  */
 export function normalizeOrderData(data: any): ComputeTotalsInput {
     // Normalize items
@@ -237,7 +276,7 @@ export function normalizeOrderData(data: any): ComputeTotalsInput {
         isGift: Boolean(it?.isGift),
     }));
 
-    // Normalize applied discounts
+    // Normalize applied discounts with CORRECT type classification
     const rawDiscounts = Array.isArray(data?.appliedDiscounts)
         ? data.appliedDiscounts
         : Array.isArray(data?.orderDiscounts)
@@ -246,26 +285,40 @@ export function normalizeOrderData(data: any): ComputeTotalsInput {
                 ? data.discounts
                 : [];
 
-    const appliedDiscounts: DiscountLineItem[] = rawDiscounts.map((d: any) => ({
-        id: String(d?.id || ""),
-        type: d?.code && !d?.isAutomatic ? "coupon" : d?.isAutomatic ? "promotion" : "other",
-        code: d?.code || null,
-        name: d?.discountName || d?.name || null,
-        amount: safeNumber(d?.amount),
-        isAutomatic: Boolean(d?.isAutomatic),
-        metadata: d?.discountMetadata || d?.metadata || null,
-    }));
+    const appliedDiscounts: DiscountLineItem[] = rawDiscounts.map((d: any) => {
+        // Extract metadata
+        const metadata = d?.discountMetadata || d?.metadata || null;
+
+        // Use centralized classification based on metadata
+        const discountType = classifyDiscount({
+            code: d?.code,
+            isAutomatic: Boolean(d?.isAutomatic),
+            metadata,
+        });
+
+        return {
+            id: String(d?.id || ""),
+            type: discountType,
+            code: d?.code || null,
+            name: d?.discountName || d?.name || null,
+            amount: safeNumber(d?.amount),
+            isAutomatic: Boolean(d?.isAutomatic),
+            metadata,
+        };
+    });
 
     // Add fallback discount if no applied discounts but discountAmount exists
     const discountAmount = safeNumber(data?.discountAmount ?? data?.discount);
     if (appliedDiscounts.length === 0 && discountAmount > 0) {
+        // If there's a code provided, it's likely a coupon
+        const hasCode = Boolean(data?.appliedDiscountCode);
         appliedDiscounts.push({
             id: "order-discount",
-            type: data?.appliedDiscountCode ? "coupon" : "other",
+            type: hasCode ? "coupon" : "other",
             code: data?.appliedDiscountCode || null,
             name: null,
             amount: discountAmount,
-            isAutomatic: !data?.appliedDiscountCode,
+            isAutomatic: !hasCode,
             metadata: null,
         });
     }
