@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
+import { computeCartTotals } from "@/components/storefront/cart/cart-pricing";
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -190,6 +191,8 @@ export default function CheckoutPage() {
   const selectedShipping = Number(shippingMethod?.price ?? 0);
   const computedTotal = cart.subtotal + cart.taxAmount + selectedShipping - cart.discountAmount;
 
+  const totals = computeCartTotals(cart, { totalAfterDiscountsOverride: computedTotal });
+
   return (
     <div className="container py-6 sm:py-8">
       {/* Header */}
@@ -342,14 +345,47 @@ export default function CheckoutPage() {
                 <span className="text-muted-foreground">
                   Items ({cart.itemCount})
                 </span>
-                <span>${cart.subtotal.toFixed(2)}</span>
+                <span>${totals.displaySubtotal.toFixed(2)}</span>
               </div>
-              {cart.discountAmount > 0 && (
+
+              {totals.saleSavings > 0 ? (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Sale savings</span>
+                  <span>-${totals.saleSavings.toFixed(2)}</span>
+                </div>
+              ) : null}
+
+              {totals.promotionSavings > 0 ? (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Promotion savings</span>
+                  <span>-${totals.promotionSavings.toFixed(2)}</span>
+                </div>
+              ) : null}
+
+              {totals.promotionDiscounts.length
+                ? totals.promotionDiscounts.map((d) => (
+                    <div key={d.id} className="flex justify-between">
+                      <span className="text-muted-foreground">Promotion{d.code ? ` (${d.code})` : ""}</span>
+                      {Number(d.amount ?? 0) === 0 ? <span>FREE</span> : <span>-${d.amount.toFixed(2)}</span>}
+                    </div>
+                  ))
+                : null}
+
+              {totals.couponDiscounts.length
+                ? totals.couponDiscounts.map((d) => (
+                    <div key={d.id} className="flex justify-between text-green-600">
+                      <span>Coupon{d.code ? ` (${d.code})` : ""}</span>
+                      {Number(d.amount ?? 0) === 0 ? <span>FREE</span> : <span>-${d.amount.toFixed(2)}</span>}
+                    </div>
+                  ))
+                : null}
+
+              {totals.otherDiscount > 0 ? (
                 <div className="flex justify-between text-green-600">
                   <span>Discount</span>
-                  <span>-${cart.discountAmount.toFixed(2)}</span>
+                  <span>-${totals.otherDiscount.toFixed(2)}</span>
                 </div>
-              )}
+              ) : null}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Shipping</span>
                 <span>
@@ -364,9 +400,20 @@ export default function CheckoutPage() {
                 <span className="text-muted-foreground">Tax</span>
                 <span>${cart.taxAmount.toFixed(2)}</span>
               </div>
+
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Total before discounts</span>
+                <span>${totals.totalBeforeDiscounts.toFixed(2)}</span>
+              </div>
+
+              <div className="flex justify-between text-green-600">
+                <span>Sum of all discounts</span>
+                <span>-${totals.sumAllDiscounts.toFixed(2)}</span>
+              </div>
+
               <div className="border-t pt-3 flex justify-between font-semibold">
                 <span>Total</span>
-                <span>${computedTotal.toFixed(2)}</span>
+                <span>${totals.totalAfterDiscounts.toFixed(2)}</span>
               </div>
             </div>
 

@@ -5,6 +5,7 @@ import { Separator } from "@/components/ui/separator";
 import { Loader2 } from "lucide-react";
 import Image from "next/image";
 import type { Cart } from "@/types/storefront";
+import { computeCartTotals } from "@/components/storefront/cart/cart-pricing";
 
 interface OrderReviewProps {
   cart: Cart;
@@ -31,39 +32,9 @@ export function OrderReview({
 
   const safeShipPrice = Number(shippingMethod?.price ?? 0);
 
-  const promotionSavings = (cart.items || []).reduce((sum: number, it: any) => {
-    const qty = Number(it.quantity || 0);
-    if (!Number.isFinite(qty) || qty <= 0) return sum;
-    const ref = Number(it.referencePrice ?? it.unitPrice ?? 0);
-    if (!Number.isFinite(ref) || ref <= 0) return sum;
-    const unit = Number(it.unitPrice ?? 0);
-    const total = Number(it.totalPrice ?? 0);
-    const isGift = Boolean((it as any).isGift) || (unit === 0 && total === 0);
-    if (isGift) return sum + ref * qty;
-    const hasOffer = Boolean(String((it as any).promotionName || "").trim());
-    if (!hasOffer) return sum;
-    if (!Number.isFinite(unit) || unit <= 0) return sum;
-    if (unit >= ref) return sum;
-    return sum + (ref - unit) * qty;
-  }, 0);
-
-  const saleSavings = (cart.items || []).reduce((sum: number, it: any) => {
-    const qty = Number(it.quantity || 0);
-    if (!Number.isFinite(qty) || qty <= 0) return sum;
-    const unit = Number(it.unitPrice ?? 0);
-    const total = Number(it.totalPrice ?? 0);
-    const isGift = Boolean((it as any).isGift) || (unit === 0 && total === 0);
-    if (isGift) return sum;
-    const ref = Number(it.referencePrice ?? it.unitPrice ?? 0);
-    const compareAt = Number((it as any).compareAtPrice ?? 0);
-    if (!Number.isFinite(ref) || ref <= 0) return sum;
-    if (!Number.isFinite(compareAt) || compareAt <= ref) return sum;
-    return sum + (compareAt - ref) * qty;
-  }, 0);
-
-  const displaySubtotal = cart.subtotal + promotionSavings + saleSavings;
-
   const computedTotal = shippingReady ? cart.subtotal + cart.taxAmount + safeShipPrice - cart.discountAmount : cart.totalAmount;
+
+  const totals = computeCartTotals(cart, { totalAfterDiscountsOverride: computedTotal });
 
   const canPlaceOrder = addressReady && shippingReady && paymentReady && !isPlacingOrder;
 
@@ -183,32 +154,45 @@ export function OrderReview({
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
             <span className="text-muted-foreground">Subtotal</span>
-            <span>${displaySubtotal.toFixed(2)}</span>
+            <span>${totals.displaySubtotal.toFixed(2)}</span>
           </div>
-          {saleSavings > 0 ? (
+          {totals.saleSavings > 0 ? (
             <div className="flex justify-between">
               <span className="text-muted-foreground">Sale savings</span>
-              <span>-${saleSavings.toFixed(2)}</span>
+              <span>-${totals.saleSavings.toFixed(2)}</span>
             </div>
           ) : null}
-          {promotionSavings > 0 ? (
+          {totals.promotionSavings > 0 ? (
             <div className="flex justify-between">
               <span className="text-muted-foreground">Promotion savings</span>
-              <span>-${promotionSavings.toFixed(2)}</span>
+              <span>-${totals.promotionSavings.toFixed(2)}</span>
             </div>
           ) : null}
-          {(cart.appliedDiscounts || []).some((d: any) => Number(d?.amount ?? 0) === 0) ? (
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Promotion</span>
-              <span>—</span>
-            </div>
-          ) : null}
-          {cart.discountAmount > 0 && (
+
+          {totals.promotionDiscounts.length
+            ? totals.promotionDiscounts.map((d) => (
+                <div key={d.id} className="flex justify-between">
+                  <span className="text-muted-foreground">Promotion{d.code ? ` (${d.code})` : ""}</span>
+                  {Number(d.amount ?? 0) === 0 ? <span>FREE</span> : <span>-${d.amount.toFixed(2)}</span>}
+                </div>
+              ))
+            : null}
+
+          {totals.couponDiscounts.length
+            ? totals.couponDiscounts.map((d) => (
+                <div key={d.id} className="flex justify-between text-green-600">
+                  <span>Coupon{d.code ? ` (${d.code})` : ""}</span>
+                  {Number(d.amount ?? 0) === 0 ? <span>FREE</span> : <span>-${d.amount.toFixed(2)}</span>}
+                </div>
+              ))
+            : null}
+
+          {totals.otherDiscount > 0 ? (
             <div className="flex justify-between text-green-600">
               <span>Discount</span>
-              <span>-${cart.discountAmount.toFixed(2)}</span>
+              <span>-${totals.otherDiscount.toFixed(2)}</span>
             </div>
-          )}
+          ) : null}
           <div className="flex justify-between">
             <span className="text-muted-foreground">Shipping</span>
             <span>
@@ -219,10 +203,20 @@ export function OrderReview({
             <span className="text-muted-foreground">Tax</span>
             <span>${cart.taxAmount.toFixed(2)}</span>
           </div>
+
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Total before discounts</span>
+            <span>${totals.totalBeforeDiscounts.toFixed(2)}</span>
+          </div>
+
+          <div className="flex justify-between text-green-600">
+            <span>Sum of all discounts</span>
+            <span>-${totals.sumAllDiscounts.toFixed(2)}</span>
+          </div>
           <Separator className="my-2" />
           <div className="flex justify-between text-lg font-semibold">
             <span>Total</span>
-            <span>${computedTotal.toFixed(2)}</span>
+            <span>${totals.totalAfterDiscounts.toFixed(2)}</span>
           </div>
         </div>
       </div>

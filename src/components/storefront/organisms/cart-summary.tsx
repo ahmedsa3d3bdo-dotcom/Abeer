@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { useCartStore } from "@/stores/cart.store";
 import { ShoppingCart, Tag, Loader2 } from "lucide-react";
 import type { Cart } from "@/types/storefront";
+import { computeCartTotals } from "@/components/storefront/cart/cart-pricing";
 
 interface CartSummaryProps {
   cart: Cart;
@@ -20,6 +21,8 @@ export function CartSummary({ cart }: CartSummaryProps) {
   const applyDiscount = useCartStore((state) => state.applyDiscount);
   const removeDiscount = useCartStore((state) => state.removeDiscount);
   const cartError = useCartStore((state) => state.error);
+
+  const totals = computeCartTotals(cart);
 
   const handleApplyDiscount = async () => {
     if (!discountCode.trim()) return;
@@ -43,40 +46,6 @@ export function CartSummary({ cart }: CartSummaryProps) {
       setIsApplyingDiscount(false);
     }
   };
-
-  const hasDiscount = cart.discountAmount > 0;
-
-  const promotionSavings = (cart.items || []).reduce((sum: number, it: any) => {
-    const qty = Number(it.quantity || 0);
-    if (!Number.isFinite(qty) || qty <= 0) return sum;
-    const ref = Number(it.referencePrice ?? it.unitPrice ?? 0);
-    if (!Number.isFinite(ref) || ref <= 0) return sum;
-    const unit = Number(it.unitPrice ?? 0);
-    const total = Number(it.totalPrice ?? 0);
-    const isGift = Boolean(it.isGift) || (unit === 0 && total === 0);
-    if (isGift) return sum + ref * qty;
-    const hasOffer = Boolean(String(it.promotionName || "").trim());
-    if (!hasOffer) return sum;
-    if (!Number.isFinite(unit) || unit <= 0) return sum;
-    if (unit >= ref) return sum;
-    return sum + (ref - unit) * qty;
-  }, 0);
-
-  const saleSavings = (cart.items || []).reduce((sum: number, it: any) => {
-    const qty = Number(it.quantity || 0);
-    if (!Number.isFinite(qty) || qty <= 0) return sum;
-    const unit = Number(it.unitPrice ?? 0);
-    const total = Number(it.totalPrice ?? 0);
-    const isGift = Boolean(it.isGift) || (unit === 0 && total === 0);
-    if (isGift) return sum;
-    const ref = Number(it.referencePrice ?? it.unitPrice ?? 0);
-    const compareAt = Number(it.compareAtPrice ?? 0);
-    if (!Number.isFinite(ref) || ref <= 0) return sum;
-    if (!Number.isFinite(compareAt) || compareAt <= ref) return sum;
-    return sum + (compareAt - ref) * qty;
-  }, 0);
-
-  const displaySubtotal = cart.subtotal + promotionSavings + saleSavings;
 
   return (
     <div className="border rounded-lg p-6 sticky top-4">
@@ -148,29 +117,47 @@ export function CartSummary({ cart }: CartSummaryProps) {
       <div className="space-y-3 text-sm">
         <div className="flex justify-between">
           <span className="text-muted-foreground">Subtotal</span>
-          <span>${displaySubtotal.toFixed(2)}</span>
+          <span>${totals.displaySubtotal.toFixed(2)}</span>
         </div>
 
-        {saleSavings > 0 ? (
+        {totals.saleSavings > 0 ? (
           <div className="flex justify-between">
             <span className="text-muted-foreground">Sale savings</span>
-            <span>-${saleSavings.toFixed(2)}</span>
+            <span>-${totals.saleSavings.toFixed(2)}</span>
           </div>
         ) : null}
 
-        {promotionSavings > 0 ? (
+        {totals.promotionSavings > 0 ? (
           <div className="flex justify-between">
             <span className="text-muted-foreground">Promotion savings</span>
-            <span>-${promotionSavings.toFixed(2)}</span>
+            <span>-${totals.promotionSavings.toFixed(2)}</span>
           </div>
         ) : null}
 
-        {hasDiscount && (
+        {totals.promotionDiscounts.length
+          ? totals.promotionDiscounts.map((d) => (
+              <div key={d.id} className="flex justify-between">
+                <span className="text-muted-foreground">Promotion{d.code ? ` (${d.code})` : ""}</span>
+                {Number(d.amount ?? 0) === 0 ? <span>FREE</span> : <span>-${d.amount.toFixed(2)}</span>}
+              </div>
+            ))
+          : null}
+
+        {totals.couponDiscounts.length
+          ? totals.couponDiscounts.map((d) => (
+              <div key={d.id} className="flex justify-between text-green-600">
+                <span>Coupon{d.code ? ` (${d.code})` : ""}</span>
+                {Number(d.amount ?? 0) === 0 ? <span>FREE</span> : <span>-${d.amount.toFixed(2)}</span>}
+              </div>
+            ))
+          : null}
+
+        {totals.otherDiscount > 0 ? (
           <div className="flex justify-between text-green-600">
             <span>Discount</span>
-            <span>-${cart.discountAmount.toFixed(2)}</span>
+            <span>-${totals.otherDiscount.toFixed(2)}</span>
           </div>
-        )}
+        ) : null}
 
         <div className="flex justify-between">
           <span className="text-muted-foreground">Shipping</span>
@@ -187,6 +174,16 @@ export function CartSummary({ cart }: CartSummaryProps) {
           <span className="text-muted-foreground">Tax</span>
           <span>${cart.taxAmount.toFixed(2)}</span>
         </div>
+
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Total before discounts</span>
+          <span>${totals.totalBeforeDiscounts.toFixed(2)}</span>
+        </div>
+
+        <div className="flex justify-between text-green-600">
+          <span>Sum of all discounts</span>
+          <span>-${totals.sumAllDiscounts.toFixed(2)}</span>
+        </div>
       </div>
 
       <Separator className="my-4" />
@@ -194,7 +191,7 @@ export function CartSummary({ cart }: CartSummaryProps) {
       {/* Total */}
       <div className="flex justify-between text-lg font-semibold mb-6">
         <span>Total</span>
-        <span>${cart.totalAmount.toFixed(2)}</span>
+        <span>${totals.totalAfterDiscounts.toFixed(2)}</span>
       </div>
 
       {/* Checkout Button */}
