@@ -6,6 +6,7 @@ import { headers } from "next/headers";
 
 import { Toaster } from "@/components/ui/sonner";
 import { PrintProvider } from "@/components/common/print/print-provider";
+import { ExportProvider } from "@/components/common/export/export-provider";
 import { getPreference } from "@/server/server-actions";
 import { settingsRepository } from "@/server/repositories/settings.repository";
 import { PreferencesStoreProvider } from "@/stores/preferences/preferences-provider";
@@ -99,11 +100,14 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       <body className={`${inter.className} min-h-screen antialiased`}>
         <PreferencesStoreProvider themeMode={themeMode} themePreset={themePreset}>
           <PrintProvider>
-            {children}
-            <Toaster />
+            <ExportProvider>
+              {children}
+              <Toaster />
+            </ExportProvider>
           </PrintProvider>
         </PreferencesStoreProvider>
       </body>
     </html>
   );
 }
+

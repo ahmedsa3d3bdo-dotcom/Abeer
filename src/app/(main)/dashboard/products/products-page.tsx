@@ -25,6 +25,8 @@ import {
 import { usePrint } from "@/components/common/print/print-provider";
 import { FormModal } from "@/components/ui/form-modal";
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
+import Link from "next/link";
+import { Download } from "lucide-react";
 
 import { getProductColumns, type ProductRow } from "./columns";
 import { ProductImageGallery } from "./product-image-gallery";
@@ -93,7 +95,7 @@ export default function ProductsPage() {
         const items = (data.data?.items || []).map((c: any) => ({ id: c.id, name: c.name }));
         setCategories(items);
       }
-    } catch {}
+    } catch { }
   }
 
   function getListParamsBase(extra: { page?: number; limit?: number } = {}) {
@@ -230,7 +232,7 @@ export default function ProductsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error?.message || "Failed to load metrics");
       setMetrics(data.data || null);
-    } catch {}
+    } catch { }
   }
 
   async function fetchProductDetail(id: string) {
@@ -256,7 +258,7 @@ export default function ProductsPage() {
         addStockQuantity: 0,
         categoryId: catId,
       }));
-    } catch {}
+    } catch { }
   }
 
   const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
@@ -391,7 +393,7 @@ export default function ProductsPage() {
         categoryIds: form.categoryId && form.categoryId !== "none" ? [form.categoryId] : undefined,
       };
       const creating = !editing;
-      const res = await fetch(creating ? "/api/v1/products" : `/api/v1/products/${editing.id}` , {
+      const res = await fetch(creating ? "/api/v1/products" : `/api/v1/products/${editing.id}`, {
         method: editing ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -411,7 +413,7 @@ export default function ProductsPage() {
           if (!addRes.ok) {
             // ignore error details here per request to avoid chatter
           }
-        } catch {}
+        } catch { }
       }
       toast.success(editing ? "Product updated" : "Product created");
       setOpen(false);
@@ -516,6 +518,12 @@ export default function ProductsPage() {
               <DropdownMenuItem onClick={() => void printAllProducts()}>Print all (matching filters)</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          <Link href="/dashboard/products/export">
+            <Button variant="outline" size="sm">
+              <Download className="mr-1 h-4 w-4" /> Export
+            </Button>
+          </Link>
 
           <FormModal
             open={open}

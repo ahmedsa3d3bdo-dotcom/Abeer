@@ -30,6 +30,8 @@ import { formatCurrency } from "@/lib/utils";
 import { usePrint } from "@/components/common/print/print-provider";
 import { FormModal } from "@/components/ui/form-modal";
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
+import Link from "next/link";
+import { Download } from "lucide-react";
 
 const DEFAULT_LIMIT = 10;
 
@@ -452,6 +454,12 @@ export default function CustomersPage() {
             </DropdownMenuContent>
           </DropdownMenu>
 
+          <Link href="/dashboard/customers/export">
+            <Button variant="outline" size="sm">
+              <Download className="mr-1 h-4 w-4" /> Export
+            </Button>
+          </Link>
+
           <FormModal
             open={open}
             onOpenChange={(o) => (o ? setOpen(true) : (setOpen(false), resetForm()))}
@@ -507,7 +515,7 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      
+
 
       {/* Table */}
       <div className="overflow-hidden rounded-lg border">
@@ -539,7 +547,7 @@ export default function CustomersPage() {
           {viewing && (
             <div className="flex-1 overflow-y-auto no-scrollbar">
               <div className="px-4 pb-6 pt-4 space-y-5">
-                
+
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="text-lg font-semibold truncate">{(viewing.firstName || viewing.lastName) ? `${viewing.firstName ?? ""} ${viewing.lastName ?? ""}`.trim() : viewing.email}</div>
@@ -547,11 +555,11 @@ export default function CustomersPage() {
                     {details?.user?.phone ? (
                       <div className="text-sm text-muted-foreground break-words">{details.user.phone}</div>
                     ) : null}
-                    
+
                   </div>
-                
+
                   <UniversalBadge kind="active" value={viewing.isActive} label={viewing.isActive ? "ACTIVE" : "INACTIVE"} />
-                  
+
                 </div>
                 <div className="flex justify-end">
                   <Button asChild variant="outline" size="sm">
@@ -567,7 +575,7 @@ export default function CustomersPage() {
                     const firstAt = details?.aggregates?.firstOrderAt ? new Date(details.aggregates.firstOrderAt) : null;
                     if (total >= 1000) tags.push("VIP");
                     if (ordersCount <= 2) tags.push("New");
-                    if (firstAt && (Date.now() - firstAt.getTime()) / (1000*60*60*24) <= 30) tags.push("Recent");
+                    if (firstAt && (Date.now() - firstAt.getTime()) / (1000 * 60 * 60 * 24) <= 30) tags.push("Recent");
                     return tags.length ? tags.map((t) => <Badge key={t} variant="secondary" className="capitalize">{t}</Badge>) : null;
                   })()}
                 </div>

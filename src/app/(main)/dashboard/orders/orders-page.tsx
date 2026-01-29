@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { RefreshCcw, ShoppingCart, DollarSign, Calendar, BarChart3, CreditCard, Clock, RotateCcw, Printer } from "lucide-react";
+import Link from "next/link";
+import { RefreshCcw, ShoppingCart, DollarSign, Calendar, BarChart3, CreditCard, Clock, RotateCcw, Printer, Download } from "lucide-react";
 import { toast } from "sonner";
 import { siteConfig } from "@/config/site";
 
@@ -293,7 +294,7 @@ export default function OrdersPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error?.message || "Failed to load metrics");
       setMetrics(data.data || null);
-    } catch {}
+    } catch { }
   }
 
   const columns = useMemo(
@@ -302,7 +303,7 @@ export default function OrdersPage() {
         onView: (row) => {
           void openDetails(row);
         },
-        onEdit: (row) => { 
+        onEdit: (row) => {
           setEditing(row);
           setForm({ status: row.status, paymentStatus: row.paymentStatus, adminNote: "" });
           setOpen(true);
@@ -503,6 +504,12 @@ export default function OrdersPage() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          <Link href="/dashboard/orders/export">
+            <Button variant="outline" size="sm">
+              <Download className="mr-1 h-4 w-4" /> Export
+            </Button>
+          </Link>
         </div>
       </div>
 
@@ -526,46 +533,46 @@ export default function OrdersPage() {
         submitText="Save"
         onSubmit={onSubmit}
       >
-          <div className="grid gap-3 py-2">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="flex flex-col gap-1.5">
-                <Label>Status</Label>
-                <Select value={form.status} onValueChange={(v) => setForm((s) => ({ ...s, status: v }))}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="processing">Processing</SelectItem>
-                    <SelectItem value="confirmed">Confirmed</SelectItem>
-                    <SelectItem value="shipped">Shipped</SelectItem>
-                    <SelectItem value="delivered">Delivered</SelectItem>
-                    <SelectItem value="cancelled">Cancelled</SelectItem>
-                    <SelectItem value="refunded">Refunded</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label>Payment</Label>
-                <Select value={form.paymentStatus} onValueChange={(v) => setForm((s) => ({ ...s, paymentStatus: v }))}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="paid">Paid</SelectItem>
-                    <SelectItem value="failed">Failed</SelectItem>
-                    <SelectItem value="refunded">Refunded</SelectItem>
-                    <SelectItem value="partially_refunded">Partially Refunded</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+        <div className="grid gap-3 py-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <Label>Status</Label>
+              <Select value={form.status} onValueChange={(v) => setForm((s) => ({ ...s, status: v }))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="processing">Processing</SelectItem>
+                  <SelectItem value="confirmed">Confirmed</SelectItem>
+                  <SelectItem value="shipped">Shipped</SelectItem>
+                  <SelectItem value="delivered">Delivered</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                  <SelectItem value="refunded">Refunded</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label>Admin Note</Label>
-              <Input value={form.adminNote} onChange={(e) => setForm((s) => ({ ...s, adminNote: e.target.value }))} />
+              <Label>Payment</Label>
+              <Select value={form.paymentStatus} onValueChange={(v) => setForm((s) => ({ ...s, paymentStatus: v }))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="paid">Paid</SelectItem>
+                  <SelectItem value="failed">Failed</SelectItem>
+                  <SelectItem value="refunded">Refunded</SelectItem>
+                  <SelectItem value="partially_refunded">Partially Refunded</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
+          <div className="flex flex-col gap-1.5">
+            <Label>Admin Note</Label>
+            <Input value={form.adminNote} onChange={(e) => setForm((s) => ({ ...s, adminNote: e.target.value }))} />
+          </div>
+        </div>
       </FormModal>
 
       <ConfirmDeleteDialog
