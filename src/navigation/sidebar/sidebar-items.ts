@@ -22,6 +22,12 @@ import {
   Image as ImageIcon,
   Shield,
   FileText,
+  TrendingUp,
+  BarChart3,
+  PieChart,
+  UserCheck,
+  Target,
+  FileSpreadsheet,
   type LucideIcon,
 } from "lucide-react";
 
@@ -61,11 +67,58 @@ export const sidebarItems: NavGroup[] = [
     label: "Dashboards",
     items: [
       {
-        title: "Default",
+        title: "Overview",
         url: "/dashboard/default",
         icon: LayoutDashboard,
         iconClassName: "text-blue-500",
         permission: "dashboard.view",
+      },
+    ],
+  },
+  {
+    id: 10,
+    label: "Analytics",
+    items: [
+      {
+        title: "Sales",
+        url: "/dashboard/analytics/sales",
+        icon: TrendingUp,
+        iconClassName: "text-emerald-500",
+        permission: "analytics.view",
+      },
+      {
+        title: "Products",
+        url: "/dashboard/analytics/products",
+        icon: BarChart3,
+        iconClassName: "text-purple-500",
+        permission: "analytics.view",
+      },
+      {
+        title: "Customers",
+        url: "/dashboard/analytics/customers",
+        icon: UserCheck,
+        iconClassName: "text-cyan-500",
+        permission: "analytics.view",
+      },
+      {
+        title: "Marketing",
+        url: "/dashboard/analytics/marketing",
+        icon: Target,
+        iconClassName: "text-pink-500",
+        permission: "analytics.view",
+      },
+      {
+        title: "Reports",
+        url: "/dashboard/analytics/reports",
+        icon: FileSpreadsheet,
+        iconClassName: "text-amber-500",
+        permission: "reports.view",
+        subItems: [
+          { title: "Sales Reports", url: "/dashboard/analytics/reports/sales", permission: "reports.view" },
+          { title: "Product Reports", url: "/dashboard/analytics/reports/products", permission: "reports.view" },
+          { title: "Customer Reports", url: "/dashboard/analytics/reports/customers", permission: "reports.view" },
+          { title: "Financial Reports", url: "/dashboard/analytics/reports/financial", permission: "reports.view" },
+        ],
       },
     ],
   },
