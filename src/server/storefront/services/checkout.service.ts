@@ -20,7 +20,7 @@ export interface PlaceOrderInput {
   cartId: string;
   shippingAddress: any;
   shippingMethod: { id: string; name: string; price: number; description?: string; estimatedDays?: number; carrier?: string };
-  paymentMethod: { type: string; [k: string]: any };
+  paymentMethod: { type: string;[k: string]: any };
   customerEmail?: string;
   customerPhone?: string;
 }
@@ -59,7 +59,8 @@ export class StorefrontCheckoutService {
     }
 
     // Detect applied scheduled offers (kind=offer) by comparing base price with cart item unitPrice
-    const scheduledOfferIds = new Set<string>();
+    // Also track the savings per offer for analytics
+    const scheduledOfferSavings = new Map<string, number>();
     try {
       const offers = await storefrontOffersService.listActivePriceOffers();
       if (offers.length) {
@@ -67,6 +68,8 @@ export class StorefrontCheckoutService {
           if (Boolean(item?.isGift)) continue;
           const productId = String(item?.productId || "");
           if (!productId) continue;
+          const qty = Number(item?.quantity || 0);
+          if (!Number.isFinite(qty) || qty <= 0) continue;
 
           // Base unit price from current variant/product price
           let baseUnit = 0;
@@ -106,7 +109,11 @@ export class StorefrontCheckoutService {
           const cartUnit = Number(item?.unitPrice ?? 0);
           if (!Number.isFinite(discounted) || !Number.isFinite(cartUnit)) continue;
           if (Number(discounted.toFixed(2)) === Number(cartUnit.toFixed(2))) {
-            scheduledOfferIds.add(String(picked.offer.id));
+            const offerId = String(picked.offer.id);
+            // Calculate savings for this item: (baseUnit - discounted) * qty
+            const itemSavings = (baseUnit - discounted) * qty;
+            const currentSavings = scheduledOfferSavings.get(offerId) || 0;
+            scheduledOfferSavings.set(offerId, currentSavings + itemSavings);
           }
         }
       }
@@ -123,13 +130,38 @@ export class StorefrontCheckoutService {
 
     const orderNumber = await nextDocumentNumber("ORD");
 
-    const giftDiscountIds = Array.from(
-      new Set(
-        (cart.items as any[])
-          .filter((it) => Boolean(it?.isGift) && Boolean(it?.giftDiscountId))
-          .map((it) => String(it.giftDiscountId)),
-      ),
-    );
+    // Track gift items by discountId and calculate their total value
+    const giftSavingsByDiscount = new Map<string, number>();
+    for (const item of cart.items as any[]) {
+      if (Boolean(item?.isGift) && Boolean(item?.giftDiscountId)) {
+        const discId = String(item.giftDiscountId);
+        const qty = Number(item?.quantity || 1);
+
+        // Fetch original price from DB since item.unitPrice is 0 for gifts
+        let baseUnit = 0;
+        if (item.variantId) {
+          const [v] = await db
+            .select({ price: schema.productVariants.price })
+            .from(schema.productVariants)
+            .where(eq(schema.productVariants.id, item.variantId as any))
+            .limit(1);
+          baseUnit = parseFloat(String((v as any)?.price ?? 0));
+        }
+        if (!Number.isFinite(baseUnit) || baseUnit <= 0) {
+          const [p] = await db
+            .select({ price: schema.products.price })
+            .from(schema.products)
+            .where(eq(schema.products.id, item.productId as any))
+            .limit(1);
+          baseUnit = parseFloat(String((p as any)?.price ?? 0));
+        }
+
+        const totalValue = baseUnit * qty;
+        const currentSavings = giftSavingsByDiscount.get(discId) || 0;
+        giftSavingsByDiscount.set(discId, currentSavings + totalValue);
+      }
+    }
+    const giftDiscountIds = Array.from(giftSavingsByDiscount.keys());
 
     // Get authenticated user (if any)
     const session = await auth();
@@ -137,13 +169,13 @@ export class StorefrontCheckoutService {
 
     const isAdminUser = userId
       ? (
-          await db
-            .select({ slug: schema.roles.slug })
-            .from(schema.userRoles)
-            .innerJoin(schema.roles, eq(schema.userRoles.roleId, schema.roles.id))
-            .where(and(eq(schema.userRoles.userId, userId as any), inArray(schema.roles.slug, ["admin", "super_admin"])))
-            .limit(1)
-        ).length > 0
+        await db
+          .select({ slug: schema.roles.slug })
+          .from(schema.userRoles)
+          .innerJoin(schema.roles, eq(schema.userRoles.roleId, schema.roles.id))
+          .where(and(eq(schema.userRoles.userId, userId as any), inArray(schema.roles.slug, ["admin", "super_admin"])))
+          .limit(1)
+      ).length > 0
       : false;
 
     // Insert order
@@ -327,7 +359,7 @@ export class StorefrontCheckoutService {
             .update(schema.discounts)
             .set({ usageCount: sql`${schema.discounts.usageCount} + 1` } as any)
             .where(eq(schema.discounts.id, appliedDiscount.id));
-        } catch {}
+        } catch { }
       }
 
       if (order && giftDiscountIds.length) {
@@ -336,14 +368,17 @@ export class StorefrontCheckoutService {
           if (appliedDiscount?.id) existing.add(String(appliedDiscount.id));
           for (const discId of giftDiscountIds) {
             if (!discId || existing.has(String(discId))) continue;
+            // Get the calculated gift savings for this discount
+            const giftSavings = giftSavingsByDiscount.get(discId) || 0;
+            const savingsAmount = Number.isFinite(giftSavings) && giftSavings > 0 ? giftSavings.toFixed(2) : "0.00";
             await tx.insert(schema.orderDiscounts).values({
               orderId: order.id,
               discountId: discId as any,
               code: null,
-              amount: "0.00",
+              amount: savingsAmount,
             } as any);
 
-            // Increment usageCount even if amount is 0 (common for BXGY gifts)
+            // Increment usageCount
             await tx
               .update(schema.discounts)
               .set({ usageCount: sql`${schema.discounts.usageCount} + 1` } as any)
@@ -351,22 +386,24 @@ export class StorefrontCheckoutService {
 
             existing.add(String(discId));
           }
-        } catch {}
+        } catch { }
       }
 
-      if (order && scheduledOfferIds.size) {
+      if (order && scheduledOfferSavings.size) {
         try {
           const existing = new Set<string>();
           if (appliedDiscount?.id) existing.add(String(appliedDiscount.id));
           for (const discId of giftDiscountIds) existing.add(String(discId));
 
-          for (const offerId of Array.from(scheduledOfferIds)) {
+          for (const [offerId, savings] of Array.from(scheduledOfferSavings.entries())) {
             if (!offerId || existing.has(String(offerId))) continue;
+            // Store actual savings amount for analytics
+            const savingsAmount = Number.isFinite(savings) && savings > 0 ? savings.toFixed(2) : "0.00";
             await tx.insert(schema.orderDiscounts).values({
               orderId: order.id,
               discountId: offerId as any,
               code: null,
-              amount: "0.00",
+              amount: savingsAmount,
             } as any);
             await tx
               .update(schema.discounts)
@@ -374,7 +411,7 @@ export class StorefrontCheckoutService {
               .where(eq(schema.discounts.id, offerId as any));
             existing.add(String(offerId));
           }
-        } catch {}
+        } catch { }
       }
 
       return { order };
@@ -426,7 +463,7 @@ export class StorefrontCheckoutService {
           { userId },
         );
       }
-    } catch {}
+    } catch { }
 
     // Clear cart after successful order
     await storefrontCartService.clearCart(input.cartId);

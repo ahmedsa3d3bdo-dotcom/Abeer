@@ -257,10 +257,16 @@ export function DiscountAnalytics() {
                                                 {discount.usageCount}
                                             </td>
                                             <td className="p-3 text-right font-medium text-green-600 dark:text-green-400">
-                                                {fmt(discount.totalSavings)}
+                                                {discount.totalSavings > 0
+                                                    ? fmt(discount.totalSavings)
+                                                    : discount.usageCount > 0
+                                                        ? <span className="text-muted-foreground text-xs">Tracking started</span>
+                                                        : fmt(0)}
                                             </td>
                                             <td className="p-3 text-right text-muted-foreground">
-                                                {fmt(discount.avgDiscountPerOrder)}
+                                                {discount.avgDiscountPerOrder > 0
+                                                    ? fmt(discount.avgDiscountPerOrder)
+                                                    : "—"}
                                             </td>
                                         </tr>
                                     ))}
