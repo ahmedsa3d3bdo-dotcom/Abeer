@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Activity, RefreshCcw, Printer, Gauge, Timer, CircleDot } from "lucide-react";
+import { Activity, RefreshCcw, Gauge, Timer, CircleDot } from "lucide-react";
 import { toast } from "sonner";
 import { LocalDateTime } from "@/components/common/local-datetime";
 
@@ -19,14 +19,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DataTable } from "@/components/data-table/data-table";
 import { DataTablePagination } from "@/components/data-table/data-table-pagination";
 import { useDataTableInstance } from "@/hooks/use-data-table-instance";
-import { usePrint } from "@/components/common/print/print-provider";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 
 import { getHealthColumns, type HealthRow } from "./columns";
 
@@ -37,9 +29,6 @@ export default function HealthPage() {
   const [runLoading, setRunLoading] = useState(false);
   const [items, setItems] = useState<HealthRow[]>([]);
   const [total, setTotal] = useState(0);
-
-  const { print, isPrinting } = usePrint();
-  const [printPreparing, setPrintPreparing] = useState(false);
 
   const [metricsLoading, setMetricsLoading] = useState(false);
   const [metrics, setMetrics] = useState<any>(null);
@@ -129,95 +118,6 @@ export default function HealthPage() {
     }, 10000);
     return () => clearInterval(t);
   }, [autoRefresh, pageIndex, pageSize, service]);
-
-  function renderHealthChecksPrint(rows: HealthRow[], title: string) {
-    const now = new Date();
-    const serviceLabel = service === "all" ? "All" : service;
-    return (
-      <div className="p-6">
-        <div className="text-lg font-semibold">{title}</div>
-        <div className="mt-1 text-xs text-muted-foreground">{now.toLocaleString()}</div>
-        <div className="mt-4 grid gap-2 text-sm">
-          <div>
-            <span className="text-muted-foreground">Service:</span> {serviceLabel}
-          </div>
-          <div>
-            <span className="text-muted-foreground">Count:</span> {rows.length}
-          </div>
-        </div>
-
-        <div className="mt-6 grid gap-3">
-          {rows.map((r) => (
-            <div key={r.id} className="rounded-md border p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-sm font-medium">{r.service}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">{r.createdAt ? new Date(r.createdAt as any).toLocaleString() : ""}</div>
-                </div>
-                <div className="text-sm font-medium">{String(r.status || "-")}</div>
-              </div>
-              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
-                  <div className="text-xs text-muted-foreground">Response time</div>
-                  <div className="mt-1 text-sm">{r.responseTime ?? "-"} ms</div>
-                </div>
-                <div>
-                  <div className="text-xs text-muted-foreground">Error</div>
-                  <div className="mt-1 text-sm">{r.error || "-"}</div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  async function fetchAllHealthChecksMatchingFilters() {
-    const all: HealthRow[] = [];
-    const limit = 200;
-    let page = 1;
-    while (true) {
-      const params = new URLSearchParams();
-      params.set("page", String(page));
-      params.set("limit", String(limit));
-      params.set("sort", "createdAt.desc");
-      if (service !== "all") params.set("service", service);
-
-      const res = await fetch(`/api/v1/health?${params.toString()}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error?.message || "Failed to load health checks");
-
-      const chunk: HealthRow[] = (data.data?.items || []).map((r: any) => ({ ...r }));
-      all.push(...chunk);
-
-      if (chunk.length < limit) break;
-      if (all.length >= 5000) break;
-      page += 1;
-    }
-    return all;
-  }
-
-  async function printSelectedHealthChecks() {
-    const selected = table.getSelectedRowModel().rows.map((r) => r.original as HealthRow);
-    if (selected.length === 0) {
-      toast.message("No rows selected");
-      return;
-    }
-    void print(renderHealthChecksPrint(selected, "Health checks (Selected)"));
-  }
-
-  async function printAllHealthChecks() {
-    try {
-      setPrintPreparing(true);
-      const all = await fetchAllHealthChecksMatchingFilters();
-      setPrintPreparing(false);
-      void print(renderHealthChecksPrint(all, "Health checks"));
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to prepare print");
-      setPrintPreparing(false);
-    }
-  }
 
   async function fetchHealth() {
     try {
@@ -433,10 +333,10 @@ export default function HealthPage() {
                   metricsLoading
                     ? "Loading..."
                     : (() => {
-                        const raw = String(metrics?.last?.status || "").trim();
-                        if (!raw) return "-";
-                        return raw;
-                      })()
+                      const raw = String(metrics?.last?.status || "").trim();
+                      if (!raw) return "-";
+                      return raw;
+                    })()
                 }
                 subtitle={metricsLoading || !metrics?.last?.createdAt ? "" : <LocalDateTime value={metrics.last.createdAt} />}
                 icon={CircleDot}
@@ -658,19 +558,6 @@ export default function HealthPage() {
           <Button variant="outline" onClick={() => void fetchHealth()} disabled={loading}>
             <RefreshCcw className="ltr:mr-1 rtl:ml-1 h-4 w-4" /> Refresh
           </Button>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" disabled={loading || printPreparing || isPrinting}>
-                <Printer className="ltr:mr-1 rtl:ml-1 h-4 w-4" /> Print
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => void printSelectedHealthChecks()}>Print selected</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => void printAllHealthChecks()}>Print all (matching filters)</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
 
           <Button onClick={() => void runConfiguredCheck()} disabled={loading || runLoading} title="Run the configured health check">
             <Activity className="ltr:mr-1 rtl:ml-1 h-4 w-4" /> Run automatic check

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, RefreshCcw, Printer } from "lucide-react";
+import { Plus, RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -14,14 +14,6 @@ import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 import { DataTable } from "@/components/data-table/data-table";
 import { DataTablePagination } from "@/components/data-table/data-table-pagination";
 import { useDataTableInstance } from "@/hooks/use-data-table-instance";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { usePrint } from "@/components/common/print/print-provider";
 
 import { getSettingColumns, type SettingRow } from "./columns";
 
@@ -31,9 +23,6 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<SettingRow[]>([]);
   const [total, setTotal] = useState(0);
-
-  const { print, isPrinting } = usePrint();
-  const [printPreparing, setPrintPreparing] = useState(false);
 
   const [q, setQ] = useState("");
   const [isPublic, setIsPublic] = useState<string>("all");
@@ -98,87 +87,6 @@ export default function SettingsPage() {
       setPageSize(ps);
     },
   });
-
-  function getListParamsBase(extra: { page?: number; limit?: number } = {}) {
-    const params = new URLSearchParams();
-    if (q) params.set("q", q);
-    if (isPublic !== "all") params.set("isPublic", String(isPublic === "public"));
-    params.set("sort", "createdAt.desc");
-    if (typeof extra.page === "number") params.set("page", String(extra.page));
-    if (typeof extra.limit === "number") params.set("limit", String(extra.limit));
-    return params;
-  }
-
-  async function fetchAllSettingsMatchingFilters() {
-    const limit = 100;
-    let page = 1;
-    let all: SettingRow[] = [];
-    let expectedTotal: number | null = null;
-
-    while (true) {
-      const params = getListParamsBase({ page, limit });
-      const res = await fetch(`/api/v1/settings?${params.toString()}`, { cache: "no-store" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error?.message || "Something went wrong");
-      const batch: SettingRow[] = (data.data?.items || []).map((r: any) => ({ ...r }));
-      expectedTotal = expectedTotal ?? Number(data.data?.total || 0);
-      all = all.concat(batch);
-      if (batch.length < limit) break;
-      if (expectedTotal !== null && all.length >= expectedTotal) break;
-      page += 1;
-      if (page > 200) break;
-    }
-    return all;
-  }
-
-  function renderSettingsPrint(rows: SettingRow[], title: string) {
-    return (
-      <div className="p-6">
-        <div className="text-lg font-semibold">{title}</div>
-        <div className="mt-1 text-xs text-muted-foreground">Total: {rows.length}</div>
-        <div className="mt-4 rounded-md border">
-          <div className="grid grid-cols-12 gap-2 border-b p-2 text-xs text-muted-foreground">
-            <div className="col-span-4">Key</div>
-            <div className="col-span-4">Value</div>
-            <div className="col-span-2">Type</div>
-            <div className="col-span-2">Visibility</div>
-          </div>
-          {rows.map((s) => (
-            <div key={s.id} className="grid grid-cols-12 gap-2 border-b p-2 text-sm">
-              <div className="col-span-4">
-                <div className="font-medium">{s.key}</div>
-                <div className="text-xs text-muted-foreground">{s.description || "—"}</div>
-              </div>
-              <div className="col-span-4 whitespace-pre-wrap break-words">{s.value}</div>
-              <div className="col-span-2">{s.type}</div>
-              <div className="col-span-2">{s.isPublic ? "Public" : "Private"}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  async function printSelectedSettings() {
-    const selected = (table as any).getSelectedRowModel?.().rows?.map((r: any) => r.original as SettingRow) || [];
-    if (!selected.length) {
-      toast.error("Select at least one setting to print");
-      return;
-    }
-    void print(renderSettingsPrint(selected, "Settings (Selected)"));
-  }
-
-  async function printAllSettings() {
-    try {
-      setPrintPreparing(true);
-      const all = await fetchAllSettingsMatchingFilters();
-      setPrintPreparing(false);
-      void print(renderSettingsPrint(all, "Settings"));
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to prepare print");
-      setPrintPreparing(false);
-    }
-  }
 
   useEffect(() => {
     void fetchSettings();
@@ -261,19 +169,6 @@ export default function SettingsPage() {
           <Button variant="outline" onClick={() => void fetchSettings()} disabled={loading}>
             <RefreshCcw className="ltr:mr-1 rtl:ml-1 h-4 w-4" /> Refresh
           </Button>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" disabled={loading || printPreparing || isPrinting}>
-                <Printer className="ltr:mr-1 rtl:ml-1 h-4 w-4" /> Print
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => void printSelectedSettings()}>Print selected</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => void printAllSettings()}>Print all (matching filters)</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
 
           <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : (setOpen(false), resetForm()))}>
             <DialogTrigger asChild>

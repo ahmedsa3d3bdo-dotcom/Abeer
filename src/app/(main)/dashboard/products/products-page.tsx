@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, RefreshCcw, Package, CheckCircle2, Star, AlertTriangle, Ban, DollarSign, BarChart3, Printer } from "lucide-react";
+import { Plus, RefreshCcw, Package, CheckCircle2, Star, AlertTriangle, Ban, DollarSign, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
 
 import { MetricCard } from "@/components/common/metric-card";
@@ -15,14 +15,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { DataTable } from "@/components/data-table/data-table";
 import { DataTablePagination } from "@/components/data-table/data-table-pagination";
 import { useDataTableInstance } from "@/hooks/use-data-table-instance";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { usePrint } from "@/components/common/print/print-provider";
 import { FormModal } from "@/components/ui/form-modal";
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 import Link from "next/link";
@@ -38,9 +30,6 @@ export default function ProductsPage() {
   const [items, setItems] = useState<ProductRow[]>([]);
   const [total, setTotal] = useState(0);
   const [metrics, setMetrics] = useState<any | null>(null);
-
-  const { print, isPrinting } = usePrint();
-  const [printPreparing, setPrintPreparing] = useState(false);
 
   const num = useMemo(
     () => new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
@@ -96,128 +85,6 @@ export default function ProductsPage() {
         setCategories(items);
       }
     } catch { }
-  }
-
-  function getListParamsBase(extra: { page?: number; limit?: number } = {}) {
-    const params = new URLSearchParams();
-    if (q) params.set("q", q);
-    if (status !== "all") params.set("status", status);
-    if (stockStatus !== "all") params.set("stockStatus", stockStatus);
-    if (featured !== "all") params.set("isFeatured", String(featured === "yes"));
-    if (onSale !== "all") params.set("onSale", String(onSale === "yes"));
-    params.set("sort", "createdAt.desc");
-    if (typeof extra.page === "number") params.set("page", String(extra.page));
-    if (typeof extra.limit === "number") params.set("limit", String(extra.limit));
-    return params;
-  }
-
-  async function fetchAllProductsMatchingFilters() {
-    const limit = 100;
-    let page = 1;
-    let all: ProductRow[] = [];
-    let expectedTotal: number | null = null;
-
-    while (true) {
-      const params = getListParamsBase({ page, limit });
-      const res = await fetch(`/api/v1/products?${params.toString()}`, { cache: "no-store" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error?.message || "Failed to load products");
-      const batch: ProductRow[] = (data.data?.items || []).map((p: any) => ({ ...p }));
-      expectedTotal = expectedTotal ?? Number(data.data?.total || 0);
-      all = all.concat(batch);
-      if (batch.length < limit) break;
-      if (expectedTotal !== null && all.length >= expectedTotal) break;
-      page += 1;
-      if (page > 200) break;
-    }
-    return all;
-  }
-
-  async function printAllProducts() {
-    try {
-      setPrintPreparing(true);
-      const all = await fetchAllProductsMatchingFilters();
-      setPrintPreparing(false);
-
-      void print(
-        <div className="p-6">
-          <div className="text-lg font-semibold">Products</div>
-          <div className="mt-1 text-xs text-muted-foreground">Total: {all.length}</div>
-          <div className="mt-4 rounded-md border">
-            <div className="grid grid-cols-12 gap-2 border-b p-2 text-xs text-muted-foreground">
-              <div className="col-span-5">Product</div>
-              <div className="col-span-3">Category</div>
-              <div className="col-span-2">Status</div>
-              <div className="col-span-2 text-right">Price</div>
-            </div>
-            {all.map((p) => (
-              <div key={p.id} className="grid grid-cols-12 gap-2 border-b p-2 text-sm">
-                <div className="col-span-5">
-                  <div className="font-medium">{p.name}</div>
-                  <div className="text-xs text-muted-foreground">SKU: {p.sku || "—"}</div>
-                </div>
-                <div className="col-span-3">{(p.categoryNames || []).length ? (p.categoryNames || []).join(", ") : "—"}</div>
-                <div className="col-span-2 capitalize">{p.status}</div>
-                <div className="col-span-2 text-right">${p.price}</div>
-              </div>
-            ))}
-          </div>
-        </div>,
-      );
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to prepare print");
-      setPrintPreparing(false);
-    }
-  }
-
-  async function printSelectedProducts() {
-    const selectedIds = Object.keys((table as any)?.getState?.().rowSelection || {});
-    if (!selectedIds.length) {
-      toast.error("Select at least one product to print");
-      return;
-    }
-
-    try {
-      setPrintPreparing(true);
-      const details = await Promise.all(
-        selectedIds.map(async (id) => {
-          const res = await fetch(`/api/v1/products/${id}`, { cache: "no-store" });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data?.error?.message || `Failed to load product ${id}`);
-          return data.data;
-        }),
-      );
-      setPrintPreparing(false);
-
-      void print(
-        <div className="p-6">
-          <div className="text-lg font-semibold">Products (Selected)</div>
-          <div className="mt-1 text-xs text-muted-foreground">Total: {details.length}</div>
-          <div className="mt-4 rounded-md border">
-            <div className="grid grid-cols-12 gap-2 border-b p-2 text-xs text-muted-foreground">
-              <div className="col-span-5">Product</div>
-              <div className="col-span-3">Category</div>
-              <div className="col-span-2">Status</div>
-              <div className="col-span-2 text-right">Price</div>
-            </div>
-            {details.map((p: any) => (
-              <div key={p.id} className="grid grid-cols-12 gap-2 border-b p-2 text-sm">
-                <div className="col-span-5">
-                  <div className="font-medium">{p.name}</div>
-                  <div className="text-xs text-muted-foreground">SKU: {p.sku || "—"}</div>
-                </div>
-                <div className="col-span-3">{Array.isArray(p.categoryNames) && p.categoryNames.length ? p.categoryNames.join(", ") : "—"}</div>
-                <div className="col-span-2 capitalize">{p.status}</div>
-                <div className="col-span-2 text-right">${String(p.price ?? "")}</div>
-              </div>
-            ))}
-          </div>
-        </div>,
-      );
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to prepare print");
-      setPrintPreparing(false);
-    }
   }
 
   async function fetchMetrics() {
@@ -505,19 +372,6 @@ export default function ProductsPage() {
           <Button variant="outline" onClick={() => void fetchProducts()} disabled={loading}>
             <RefreshCcw className="mr-1 h-4 w-4" /> Refresh
           </Button>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" disabled={loading || printPreparing || isPrinting}>
-                <Printer className="mr-1 h-4 w-4" /> Print
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => void printSelectedProducts()}>Print selected</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => void printAllProducts()}>Print all (matching filters)</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
 
           <Link href="/dashboard/products/export">
             <Button variant="outline" size="sm">

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { RefreshCcw, Star, CheckCircle2, Clock, Calendar, ShieldCheck, Printer } from "lucide-react";
+import Link from "next/link";
+import { RefreshCcw, Star, CheckCircle2, Clock, Calendar, ShieldCheck, Download, Printer } from "lucide-react";
 import { toast } from "sonner";
 
 import { MetricCard } from "@/components/common/metric-card";
@@ -14,13 +15,6 @@ import { DataTable } from "@/components/data-table/data-table";
 import { DataTablePagination } from "@/components/data-table/data-table-pagination";
 import { useDataTableInstance } from "@/hooks/use-data-table-instance";
 import { useNewNotifications } from "@/hooks/use-new-notifications";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { usePrint } from "@/components/common/print/print-provider";
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 import { Dialog } from "@/components/ui/dialog";
@@ -40,7 +34,6 @@ export default function ReviewsPage() {
   const [viewTarget, setViewTarget] = useState<ReviewRow | null>(null);
 
   const { print, isPrinting } = usePrint();
-  const [printPreparing, setPrintPreparing] = useState(false);
 
   const [q, setQ] = useState("");
   const [approval, setApproval] = useState<string>("all"); // all | approved | pending
@@ -127,7 +120,7 @@ export default function ReviewsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error?.message || "Failed to load metrics");
       setMetrics(data.data || null);
-    } catch {}
+    } catch { }
   }
 
   const table = useDataTableInstance({
@@ -143,126 +136,6 @@ export default function ReviewsPage() {
       setPageSize(ps);
     },
   });
-
-  function getListParamsBase(extra: { page?: number; limit?: number } = {}) {
-    const params = new URLSearchParams();
-    if (q) params.set("q", q);
-    if (approval !== "all") params.set("isApproved", String(approval === "approved"));
-    if (rating !== "all") params.set("rating", rating);
-    params.set("sort", "createdAt.desc");
-    if (typeof extra.page === "number") params.set("page", String(extra.page));
-    if (typeof extra.limit === "number") params.set("limit", String(extra.limit));
-    return params;
-  }
-
-  async function fetchAllReviewsMatchingFilters() {
-    const limit = 100;
-    let page = 1;
-    let all: ReviewRow[] = [];
-    let expectedTotal: number | null = null;
-
-    while (true) {
-      const params = getListParamsBase({ page, limit });
-      const res = await fetch(`/api/v1/reviews?${params.toString()}`, { cache: "no-store" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error?.message || "Failed to load reviews");
-      const batch: ReviewRow[] = (data.data?.items || []).map((r: any) => {
-        const name = [r.userFirstName, r.userLastName].filter(Boolean).join(" ");
-        const emailName = (r.userEmail || "").split("@")[0];
-        return { ...r, userName: name || emailName || null } as ReviewRow;
-      });
-      expectedTotal = expectedTotal ?? Number(data.data?.total || 0);
-      all = all.concat(batch);
-      if (batch.length < limit) break;
-      if (expectedTotal !== null && all.length >= expectedTotal) break;
-      page += 1;
-      if (page > 200) break;
-    }
-    return all;
-  }
-
-  async function printAllReviews() {
-    try {
-      setPrintPreparing(true);
-      const all = await fetchAllReviewsMatchingFilters();
-      setPrintPreparing(false);
-
-      void print(
-        <div className="p-6">
-          <div className="text-lg font-semibold">Reviews</div>
-          <div className="mt-1 text-xs text-muted-foreground">Total: {all.length}</div>
-          <div className="mt-4 rounded-md border">
-            <div className="grid grid-cols-12 gap-2 border-b p-2 text-xs text-muted-foreground">
-              <div className="col-span-4">Product</div>
-              <div className="col-span-2">Rating</div>
-              <div className="col-span-3">User</div>
-              <div className="col-span-3">Status</div>
-            </div>
-            {all.map((r) => (
-              <div key={r.id} className="grid grid-cols-12 gap-2 border-b p-2 text-sm">
-                <div className="col-span-4">
-                  <div className="font-medium">{r.productName}</div>
-                  <div className="text-xs text-muted-foreground">{r.title || "—"}</div>
-                </div>
-                <div className="col-span-2">{r.rating}★</div>
-                <div className="col-span-3">{r.userName || "—"}</div>
-                <div className="col-span-3">{r.isApproved ? "Approved" : "Pending"}</div>
-              </div>
-            ))}
-          </div>
-        </div>,
-      );
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to prepare print");
-      setPrintPreparing(false);
-    }
-  }
-
-  async function printSelectedReviews() {
-    const selectedIds = Object.keys((table as any)?.getState?.().rowSelection || {});
-    if (!selectedIds.length) {
-      toast.error("Select at least one review to print");
-      return;
-    }
-
-    try {
-      setPrintPreparing(true);
-      const details = await Promise.all(
-        selectedIds.map(async (id) => {
-          const res = await fetch(`/api/v1/reviews/${id}`, { cache: "no-store" });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data?.error?.message || `Failed to load review ${id}`);
-          return data.data;
-        }),
-      );
-      setPrintPreparing(false);
-
-      void print(
-        <div className="p-6">
-          <div className="text-lg font-semibold">Reviews (Selected)</div>
-          <div className="mt-1 text-xs text-muted-foreground">Total: {details.length}</div>
-          {details.map((r: any, idx: number) => (
-            <div key={r.id} className={idx === details.length - 1 ? "" : "print-page-break"}>
-              <div className="mt-4 rounded-md border p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <div className="text-base font-semibold">{r.title || "Review"}</div>
-                    <div className="text-sm text-muted-foreground">Rating: {r.rating}★</div>
-                    <div className="text-sm text-muted-foreground">{r.isApproved ? "Approved" : "Pending"}</div>
-                  </div>
-                  <div className="text-sm text-muted-foreground">{r.createdAt ? new Date(r.createdAt).toLocaleString() : "—"}</div>
-                </div>
-                <div className="mt-3 whitespace-pre-wrap text-sm">{r.content || "—"}</div>
-              </div>
-            </div>
-          ))}
-        </div>,
-      );
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to prepare print");
-      setPrintPreparing(false);
-    }
-  }
 
   useEffect(() => {
     void fetchReviews();
@@ -365,7 +238,7 @@ export default function ReviewsPage() {
                     </div>,
                   );
                 }}
-                disabled={loading || isPrinting || printPreparing || !viewTarget}
+                disabled={loading || isPrinting || !viewTarget}
               >
                 <Printer className="mr-1 h-4 w-4" /> Print
               </Button>
@@ -456,18 +329,11 @@ export default function ReviewsPage() {
             <RefreshCcw className="mr-1 h-4 w-4" /> Refresh
           </Button>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" disabled={loading || printPreparing || isPrinting}>
-                <Printer className="mr-1 h-4 w-4" /> Print
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => void printSelectedReviews()}>Print selected</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => void printAllReviews()}>Print all (matching filters)</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Link href="/dashboard/reviews/export">
+            <Button variant="outline" size="sm">
+              <Download className="mr-1 h-4 w-4" /> Export
+            </Button>
+          </Link>
         </div>
       </div>
 

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { RefreshCcw, Trash2, Printer, FileText, AlertTriangle, XCircle, Layers } from "lucide-react";
+import Link from "next/link";
+import { RefreshCcw, Trash2, Printer, FileText, AlertTriangle, XCircle, Layers, Download } from "lucide-react";
 import { toast } from "sonner";
 
 import { MetricCard } from "@/components/common/metric-card";
@@ -16,13 +17,6 @@ import { DataTable } from "@/components/data-table/data-table";
 import { DataTablePagination } from "@/components/data-table/data-table-pagination";
 import { useDataTableInstance } from "@/hooks/use-data-table-instance";
 import { usePrint } from "@/components/common/print/print-provider";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 
 import { getSystemLogColumns, type SystemLogRow } from "./columns";
 
@@ -34,7 +28,6 @@ export default function SystemLogsPage() {
   const [total, setTotal] = useState(0);
 
   const { print, isPrinting } = usePrint();
-  const [printPreparing, setPrintPreparing] = useState(false);
 
   const [q, setQ] = useState("");
   const [level, setLevel] = useState("");
@@ -107,95 +100,6 @@ export default function SystemLogsPage() {
   useEffect(() => {
     void fetchLogs();
   }, [q, level, source, user, path, pageIndex, pageSize]);
-
-  function getListParamsBase(extra: { page?: number; limit?: number } = {}) {
-    const params = new URLSearchParams();
-    if (q) params.set("q", q);
-    if (level) params.set("level", level);
-    if (source) params.set("source", source);
-    if (user) params.set("user", user);
-    if (path) params.set("path", path);
-    params.set("sort", "createdAt.desc");
-    if (typeof extra.page === "number") params.set("page", String(extra.page));
-    if (typeof extra.limit === "number") params.set("limit", String(extra.limit));
-    return params;
-  }
-
-  async function fetchAllLogsMatchingFilters() {
-    const limit = 100;
-    let page = 1;
-    let all: SystemLogRow[] = [];
-    let expectedTotal: number | null = null;
-
-    while (true) {
-      const params = getListParamsBase({ page, limit });
-      const res = await fetch(`/api/v1/system/logs?${params.toString()}`, { cache: "no-store" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error?.message || "Failed to load system logs");
-
-      const batch: SystemLogRow[] = (data.data?.items || []).map((r: any) => ({ ...r }));
-      expectedTotal = expectedTotal ?? Number(data.data?.total || 0);
-      all = all.concat(batch);
-      if (batch.length < limit) break;
-      if (expectedTotal !== null && all.length >= expectedTotal) break;
-      page += 1;
-      if (page > 200) break;
-    }
-    return all;
-  }
-
-  function renderSystemLogsPrint(rows: SystemLogRow[], title: string) {
-    return (
-      <div className="p-6">
-        <div className="text-lg font-semibold">{title}</div>
-        <div className="mt-1 text-xs text-muted-foreground">Total: {rows.length}</div>
-        <div className="mt-4 rounded-md border">
-          <div className="grid grid-cols-12 gap-2 border-b p-2 text-xs text-muted-foreground">
-            <div className="col-span-2">Level</div>
-            <div className="col-span-2">Source</div>
-            <div className="col-span-5">Message</div>
-            <div className="col-span-3">Time</div>
-          </div>
-          {rows.map((r) => (
-            <div key={r.id} className="grid grid-cols-12 gap-2 border-b p-2 text-sm">
-              <div className="col-span-2">{String(r.level || "").toUpperCase()}</div>
-              <div className="col-span-2">{r.source || "-"}</div>
-              <div className="col-span-5">
-                <div className="font-medium">{r.message}</div>
-                <div className="text-xs text-muted-foreground">
-                  {r.method ? `${r.method} ` : ""}
-                  {r.path || ""}
-                  {r.statusCode != null ? ` · ${r.statusCode}` : ""}
-                </div>
-              </div>
-              <div className="col-span-3">{r.createdAt ? new Date(r.createdAt as any).toLocaleString() : "—"}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  async function printSelectedLogs() {
-    const selected = (table as any).getSelectedRowModel?.().rows?.map((r: any) => r.original as SystemLogRow) || [];
-    if (!selected.length) {
-      toast.error("Select at least one log to print");
-      return;
-    }
-    void print(renderSystemLogsPrint(selected, "System Logs (Selected)"));
-  }
-
-  async function printAllLogs() {
-    try {
-      setPrintPreparing(true);
-      const all = await fetchAllLogsMatchingFilters();
-      setPrintPreparing(false);
-      void print(renderSystemLogsPrint(all, "System Logs"));
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to prepare print");
-      setPrintPreparing(false);
-    }
-  }
 
   async function fetchLogs() {
     try {
@@ -299,22 +203,15 @@ export default function SystemLogsPage() {
             <RefreshCcw className="mr-1 h-4 w-4" /> Refresh
           </Button>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" disabled={loading || printPreparing || isPrinting}>
-                <Printer className="mr-1 h-4 w-4" /> Print
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => void printSelectedLogs()}>Print selected</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => void printAllLogs()}>Print all (matching filters)</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
           <Button variant="destructive" onClick={() => void purgeRetention()}>
             <Trash2 className="mr-1 h-4 w-4" /> Purge 90d+
           </Button>
+
+          <Link href="/dashboard/system/logs/export">
+            <Button variant="outline" size="sm">
+              <Download className="mr-1 h-4 w-4" /> Export
+            </Button>
+          </Link>
         </div>
       </div>
 
@@ -385,7 +282,7 @@ export default function SystemLogsPage() {
                     </div>,
                   );
                 }}
-                disabled={loading || isPrinting || printPreparing || !viewing}
+                disabled={loading || isPrinting || !viewing}
               >
                 <Printer className="mr-1 h-4 w-4" /> Print
               </Button>

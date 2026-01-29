@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { RefreshCcw, ShoppingCart, DollarSign, Calendar, BarChart3, CreditCard, Clock, RotateCcw, Printer, Download } from "lucide-react";
+import { RefreshCcw, ShoppingCart, DollarSign, Calendar, BarChart3, CreditCard, Download } from "lucide-react";
 import { toast } from "sonner";
 import { siteConfig } from "@/config/site";
 
@@ -18,20 +18,11 @@ import { DataTablePagination } from "@/components/data-table/data-table-paginati
 import { useDataTableInstance } from "@/hooks/use-data-table-instance";
 import { formatCurrency } from "@/lib/utils";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { usePrint } from "@/components/common/print/print-provider";
 import { FormModal } from "@/components/ui/form-modal";
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 
 import { getOrderColumns, type OrderRow } from "./columns";
 import { DrawerContent } from "./_components/drawer-content";
-import { InvoiceContent } from "./_components/invoice-content";
 import { useNewNotifications } from "@/hooks/use-new-notifications";
 
 const DEFAULT_LIMIT = 10;
@@ -41,9 +32,6 @@ export default function OrdersPage() {
   const [items, setItems] = useState<OrderRow[]>([]);
   const [total, setTotal] = useState(0);
   const [metrics, setMetrics] = useState<any | null>(null);
-
-  const { print, isPrinting } = usePrint();
-  const [printPreparing, setPrintPreparing] = useState(false);
 
   const [publicSettings, setPublicSettings] = useState<Record<string, string> | null>(null);
 
@@ -147,138 +135,6 @@ export default function OrdersPage() {
     } finally {
       setDetailLoading(false);
     }
-  }
-
-  function getListParamsBase(extra: { page?: number; limit?: number } = {}) {
-    const params = new URLSearchParams();
-    if (q) params.set("q", q);
-    if (status !== "all") params.set("status", status);
-    if (paymentStatus !== "all") params.set("paymentStatus", paymentStatus);
-    if (dateFrom) params.set("dateFrom", dateFrom);
-    if (dateTo) params.set("dateTo", dateTo);
-    if (userIdFilter) params.set("userId", userIdFilter);
-    params.set("sort", "createdAt.desc");
-    if (typeof extra.page === "number") params.set("page", String(extra.page));
-    if (typeof extra.limit === "number") params.set("limit", String(extra.limit));
-    return params;
-  }
-
-  async function fetchAllOrdersMatchingFilters() {
-    const limit = 100;
-    let page = 1;
-    let all: OrderRow[] = [];
-    let expectedTotal: number | null = null;
-
-    while (true) {
-      const params = getListParamsBase({ page, limit });
-      const res = await fetch(`/api/v1/orders?${params.toString()}`, { cache: "no-store" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error?.message || "Failed to load orders");
-      const batch: OrderRow[] = (data.data?.items || []).map((o: any) => ({ ...o }));
-      expectedTotal = expectedTotal ?? Number(data.data?.total || 0);
-      all = all.concat(batch);
-      if (batch.length < limit) break;
-      if (expectedTotal !== null && all.length >= expectedTotal) break;
-      page += 1;
-      if (page > 200) break;
-    }
-    return all;
-  }
-
-  async function printAllOrders() {
-    try {
-      setPrintPreparing(true);
-      const all = await fetchAllOrdersMatchingFilters();
-      setPrintPreparing(false);
-      void print(
-        <div className="p-6">
-          <div className="text-lg font-semibold">Orders</div>
-          <div className="mt-1 text-xs text-muted-foreground">Total: {all.length}</div>
-          <div className="mt-4 rounded-md border">
-            <div className="grid grid-cols-12 gap-2 border-b p-2 text-xs text-muted-foreground">
-              <div className="col-span-3">Order</div>
-              <div className="col-span-3">Customer</div>
-              <div className="col-span-2">Status</div>
-              <div className="col-span-2">Payment</div>
-              <div className="col-span-2 text-right">Total</div>
-            </div>
-            {all.map((o) => (
-              <div key={o.id} className="grid grid-cols-12 gap-2 border-b p-2 text-sm">
-                <div className="col-span-3 font-medium">#{o.orderNumber}</div>
-                <div className="col-span-3">
-                  {(() => {
-                    const fn = o.customerFirstName || "";
-                    const ln = o.customerLastName || "";
-                    const full = `${fn} ${ln}`.trim();
-                    return full || o.customerEmail || "—";
-                  })()}
-                </div>
-                <div className="col-span-2 capitalize">{o.status}</div>
-                <div className="col-span-2 capitalize">{o.paymentStatus}</div>
-                <div className="col-span-2 text-right">
-                  {formatCurrency(Number(o.totalAmount ?? 0), { currency: o.currency || "CAD", locale: "en-CA" })}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>,
-      );
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to prepare print");
-      setPrintPreparing(false);
-    }
-  }
-
-  async function printSelectedOrders() {
-    const selectedIds = Object.keys((table as any)?.getState?.().rowSelection || {});
-    if (!selectedIds.length) {
-      toast.error("Select at least one order to print");
-      return;
-    }
-    try {
-      setPrintPreparing(true);
-      const details = await Promise.all(
-        selectedIds.map(async (id) => {
-          const res = await fetch(`/api/v1/orders/${id}/details`, { cache: "no-store" });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data?.error?.message || `Failed to load order ${id}`);
-          return data.data;
-        }),
-      );
-      setPrintPreparing(false);
-      void print(
-        <div className="p-6">
-          {details.map((d, idx) => (
-            <div key={String(d?.order?.id || idx)} className={idx === details.length - 1 ? "" : "print-page-break"}>
-              <div className="text-lg font-semibold">Order #{d?.order?.orderNumber}</div>
-              <div className="mt-4">
-                <DrawerContent d={d} />
-              </div>
-            </div>
-          ))}
-        </div>,
-      );
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to prepare print");
-      setPrintPreparing(false);
-    }
-  }
-
-  function printDrawerOrder() {
-    if (!detail?.order?.id) return;
-    void print(
-      <div className="p-6">
-        <div className="text-lg font-semibold">Order #{detail?.order?.orderNumber}</div>
-        <div className="mt-4">
-          <DrawerContent d={detail} />
-        </div>
-      </div>,
-    );
-  }
-
-  function printDrawerInvoice() {
-    if (!detail?.order?.id) return;
-    void print(<InvoiceContent d={detail} siteName={siteName} seller={seller} />);
   }
 
   async function fetchMetrics() {
@@ -480,31 +336,6 @@ export default function OrdersPage() {
             <RefreshCcw className="mr-1 h-4 w-4" /> Refresh
           </Button>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" disabled={loading || printPreparing || isPrinting}>
-                <Printer className="mr-1 h-4 w-4" /> Print
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                onClick={() => {
-                  void printSelectedOrders();
-                }}
-              >
-                Print selected
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => {
-                  void printAllOrders();
-                }}
-              >
-                Print all (matching filters)
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
           <Link href="/dashboard/orders/export">
             <Button variant="outline" size="sm">
               <Download className="mr-1 h-4 w-4" /> Export
@@ -599,19 +430,12 @@ export default function OrdersPage() {
               {detailLoading && <div className="text-sm text-muted-foreground">Loading...</div>}
               {!detailLoading && detail && (
                 <>
-                  <div className="flex items-center justify-end">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="outline" disabled={printPreparing || isPrinting}>
-                          <Printer className="mr-1 h-4 w-4" /> Print
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={printDrawerOrder}>Print details</DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={printDrawerInvoice}>Print invoice</DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                  <div className="flex items-center justify-end gap-2">
+                    <Link href={`/dashboard/orders/export/${detail?.order?.id}`}>
+                      <Button variant="outline" size="sm">
+                        <Download className="mr-1 h-4 w-4" /> Export / Invoice
+                      </Button>
+                    </Link>
                   </div>
 
                   <DrawerContent d={detail} />

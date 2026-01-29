@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, RefreshCcw, Layers, CheckCircle2, Clock, Package, DollarSign, XCircle, Ban, Printer } from "lucide-react";
+import Link from "next/link";
+import { Plus, RefreshCcw, Layers, CheckCircle2, Clock, Package, DollarSign, Ban, Download } from "lucide-react";
 import { toast } from "sonner";
 
 import { MetricCard } from "@/components/common/metric-card";
@@ -14,14 +15,6 @@ import { CommandDialog, CommandInput, CommandList, CommandEmpty, CommandGroup, C
 import { DataTable } from "@/components/data-table/data-table";
 import { DataTablePagination } from "@/components/data-table/data-table-pagination";
 import { useDataTableInstance } from "@/hooks/use-data-table-instance";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { usePrint } from "@/components/common/print/print-provider";
 import { FormModal } from "@/components/ui/form-modal";
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 
@@ -34,9 +27,6 @@ export default function ReturnsPage() {
   const [items, setItems] = useState<ReturnRow[]>([]);
   const [total, setTotal] = useState(0);
   const [metrics, setMetrics] = useState<any | null>(null);
-
-  const { print, isPrinting } = usePrint();
-  const [printPreparing, setPrintPreparing] = useState(false);
 
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<string>("all");
@@ -141,7 +131,7 @@ export default function ReturnsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error?.message || "Failed to load metrics");
       setMetrics(data.data || null);
-    } catch {}
+    } catch { }
   }
 
   const table = useDataTableInstance({
@@ -157,125 +147,6 @@ export default function ReturnsPage() {
       setPageSize(ps);
     },
   });
-
-  function getListParamsBase(extra: { page?: number; limit?: number } = {}) {
-    const params = new URLSearchParams();
-    if (q) params.set("q", q);
-    if (status !== "all") params.set("status", status);
-    params.set("sort", "createdAt.desc");
-    if (typeof extra.page === "number") params.set("page", String(extra.page));
-    if (typeof extra.limit === "number") params.set("limit", String(extra.limit));
-    return params;
-  }
-
-  async function fetchAllReturnsMatchingFilters() {
-    const limit = 100;
-    let page = 1;
-    let all: ReturnRow[] = [];
-    let expectedTotal: number | null = null;
-
-    while (true) {
-      const params = getListParamsBase({ page, limit });
-      const res = await fetch(`/api/v1/returns?${params.toString()}`, { cache: "no-store" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error?.message || "Failed to load returns");
-      const batch: ReturnRow[] = (data.data?.items || []).map((r: any) => ({ ...r }));
-      expectedTotal = expectedTotal ?? Number(data.data?.total || 0);
-      all = all.concat(batch);
-      if (batch.length < limit) break;
-      if (expectedTotal !== null && all.length >= expectedTotal) break;
-      page += 1;
-      if (page > 200) break;
-    }
-    return all;
-  }
-
-  async function printAllReturns() {
-    try {
-      setPrintPreparing(true);
-      const all = await fetchAllReturnsMatchingFilters();
-      setPrintPreparing(false);
-
-      void print(
-        <div className="p-6">
-          <div className="text-lg font-semibold">Returns</div>
-          <div className="mt-1 text-xs text-muted-foreground">Total: {all.length}</div>
-          <div className="mt-4 rounded-md border">
-            <div className="grid grid-cols-12 gap-2 border-b p-2 text-xs text-muted-foreground">
-              <div className="col-span-4">Order / RMA</div>
-              <div className="col-span-2">Status</div>
-              <div className="col-span-2">Requested</div>
-              <div className="col-span-2">Approved</div>
-              <div className="col-span-2">Received</div>
-            </div>
-            {all.map((r) => (
-              <div key={r.id} className="grid grid-cols-12 gap-2 border-b p-2 text-sm">
-                <div className="col-span-4">
-                  <div className="font-medium">{r.orderNumber || r.orderId}</div>
-                  <div className="text-xs text-muted-foreground">RMA: {r.rmaNumber}</div>
-                </div>
-                <div className="col-span-2 capitalize">{String(r.status)}</div>
-                <div className="col-span-2">{r.requestedAt ? new Date(r.requestedAt as any).toLocaleString() : "—"}</div>
-                <div className="col-span-2">{r.approvedAt ? new Date(r.approvedAt as any).toLocaleString() : "—"}</div>
-                <div className="col-span-2">{r.receivedAt ? new Date(r.receivedAt as any).toLocaleString() : "—"}</div>
-              </div>
-            ))}
-          </div>
-        </div>,
-      );
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to prepare print");
-      setPrintPreparing(false);
-    }
-  }
-
-  async function printSelectedReturns() {
-    const selectedIds = Object.keys((table as any)?.getState?.().rowSelection || {});
-    if (!selectedIds.length) {
-      toast.error("Select at least one return to print");
-      return;
-    }
-
-    try {
-      setPrintPreparing(true);
-      const details = await Promise.all(
-        selectedIds.map(async (id) => {
-          const res = await fetch(`/api/v1/returns/${id}`, { cache: "no-store" });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data?.error?.message || `Failed to load return ${id}`);
-          return data.data;
-        }),
-      );
-      setPrintPreparing(false);
-
-      void print(
-        <div className="p-6">
-          <div className="text-lg font-semibold">Returns (Selected)</div>
-          <div className="mt-1 text-xs text-muted-foreground">Total: {details.length}</div>
-          <div className="mt-4 rounded-md border">
-            <div className="grid grid-cols-12 gap-2 border-b p-2 text-xs text-muted-foreground">
-              <div className="col-span-4">Order / RMA</div>
-              <div className="col-span-2">Status</div>
-              <div className="col-span-6">Notes</div>
-            </div>
-            {details.map((r: any) => (
-              <div key={r.id} className="grid grid-cols-12 gap-2 border-b p-2 text-sm">
-                <div className="col-span-4">
-                  <div className="font-medium">{r.orderNumber || r.orderId}</div>
-                  <div className="text-xs text-muted-foreground">RMA: {r.rmaNumber}</div>
-                </div>
-                <div className="col-span-2 capitalize">{String(r.status)}</div>
-                <div className="col-span-6">{r.notes || r.reason || "—"}</div>
-              </div>
-            ))}
-          </div>
-        </div>,
-      );
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to prepare print");
-      setPrintPreparing(false);
-    }
-  }
 
   useEffect(() => {
     void fetchItems();
@@ -316,7 +187,7 @@ export default function ReturnsPage() {
         for (const it of items) initSel[it.id] = { qty: 0, reason: "" };
         setSelected(initSel);
       }
-    } catch {}
+    } catch { }
   }
 
   async function fetchOrders(q: string) {
@@ -329,7 +200,7 @@ export default function ReturnsPage() {
       if (res.ok) {
         setOrderOptions((data.data?.items || []).map((o: any) => ({ id: o.id, orderNumber: o.orderNumber, customerEmail: o.customerEmail })));
       }
-    } catch {}
+    } catch { }
   }
 
   function resetForm() {
@@ -413,18 +284,11 @@ export default function ReturnsPage() {
             <RefreshCcw className="mr-1 h-4 w-4" /> Refresh
           </Button>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" disabled={loading || printPreparing || isPrinting}>
-                <Printer className="mr-1 h-4 w-4" /> Print
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => void printSelectedReturns()}>Print selected</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => void printAllReturns()}>Print all (matching filters)</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Link href="/dashboard/returns/export">
+            <Button variant="outline" size="sm">
+              <Download className="mr-1 h-4 w-4" /> Export
+            </Button>
+          </Link>
 
           <FormModal
             open={open}
@@ -444,101 +308,101 @@ export default function ReturnsPage() {
               </Button>
             }
           >
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="flex flex-col gap-1.5 sm:col-span-2">
-                  <Label>Order</Label>
-                  <div className="flex gap-2">
-                    <Input readOnly value={orderLabel || form.orderId} placeholder="Select an order" />
-                    <Button type="button" variant="outline" onClick={() => { setOrderPickerOpen(true); void fetchOrders(orderSearch); }}>Select Order</Button>
-                  </div>
-                  <CommandDialog open={orderPickerOpen} onOpenChange={(v) => setOrderPickerOpen(v)}>
-                    <CommandInput value={orderSearch} onValueChange={(v) => { setOrderSearch(v); void fetchOrders(v); }} placeholder="Search orders by number or email..." />
-                    <CommandList>
-                      <CommandEmpty>No orders found.</CommandEmpty>
-                      <CommandGroup heading="Orders">
-                        {orderOptions.map((o) => (
-                          <CommandItem key={o.id} value={`${o.orderNumber} ${o.customerEmail || ""}`} onSelect={() => {
-                            setForm((s) => ({ ...s, orderId: o.id }));
-                            setOrderLabel(o.orderNumber);
-                            setOrderPickerOpen(false);
-                            void fetchOrderItems();
-                          }}>
-                            <div className="flex flex-col">
-                              <span className="font-medium">{o.orderNumber}</span>
-                              {o.customerEmail ? (<span className="text-muted-foreground text-xs">{o.customerEmail}</span>) : null}
-                            </div>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </CommandDialog>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5 sm:col-span-2">
+                <Label>Order</Label>
+                <div className="flex gap-2">
+                  <Input readOnly value={orderLabel || form.orderId} placeholder="Select an order" />
+                  <Button type="button" variant="outline" onClick={() => { setOrderPickerOpen(true); void fetchOrders(orderSearch); }}>Select Order</Button>
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>RMA Number</Label>
-                  <Input value={form.rmaNumber} onChange={(e) => setForm((s) => ({ ...s, rmaNumber: e.target.value }))} />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>Status</Label>
-                  <Select value={form.status} onValueChange={(v) => setForm((s) => ({ ...s, status: v }))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="requested">Requested</SelectItem>
-                      <SelectItem value="approved">Approved</SelectItem>
-                      <SelectItem value="received">Received</SelectItem>
-                      <SelectItem value="refunded">Refunded</SelectItem>
-                      <SelectItem value="rejected">Rejected</SelectItem>
-                      <SelectItem value="cancelled">Cancelled</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex flex-col gap-1.5 sm:col-span-2">
-                  <Label>Reason</Label>
-                  <Input value={form.reason} onChange={(e) => setForm((s) => ({ ...s, reason: e.target.value }))} />
-                </div>
-                <div className="flex flex-col gap-1.5 sm:col-span-2">
-                  <Label>Notes</Label>
-                  <Input value={form.notes} onChange={(e) => setForm((s) => ({ ...s, notes: e.target.value }))} />
-                </div>
-                {orderItems.length > 0 && (
-                  <div className="sm:col-span-2">
-                    <Label>Items to Return</Label>
-                    <div className="mt-2 max-h-56 overflow-auto rounded border p-2">
-                      <div className="grid grid-cols-1 gap-2">
-                        {orderItems.map((it) => (
-                          <div key={it.id} className="flex items-center justify-between gap-3">
-                            <div className="min-w-0 flex-1">
-                              <div className="truncate text-sm font-medium">{it.productName}</div>
-                              <div className="text-muted-foreground text-xs">Qty: {it.quantity}</div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Label className="text-xs">Qty</Label>
-                              <Input
-                                className="w-20"
-                                type="number"
-                                min={0}
-                                max={it.quantity}
-                                value={selected[it.id]?.qty ?? 0}
-                                onChange={(e) => {
-                                  const v = Math.max(0, Math.min(Number(e.target.value || 0), it.quantity));
-                                  setSelected((s) => ({ ...s, [it.id]: { qty: v, reason: s[it.id]?.reason || "" } }));
-                                }}
-                              />
-                              <Label className="text-xs">Reason</Label>
-                              <Input
-                                className="w-48"
-                                value={selected[it.id]?.reason ?? ""}
-                                onChange={(e) => setSelected((s) => ({ ...s, [it.id]: { qty: s[it.id]?.qty || 0, reason: e.target.value } }))}
-                              />
-                            </div>
+                <CommandDialog open={orderPickerOpen} onOpenChange={(v) => setOrderPickerOpen(v)}>
+                  <CommandInput value={orderSearch} onValueChange={(v) => { setOrderSearch(v); void fetchOrders(v); }} placeholder="Search orders by number or email..." />
+                  <CommandList>
+                    <CommandEmpty>No orders found.</CommandEmpty>
+                    <CommandGroup heading="Orders">
+                      {orderOptions.map((o) => (
+                        <CommandItem key={o.id} value={`${o.orderNumber} ${o.customerEmail || ""}`} onSelect={() => {
+                          setForm((s) => ({ ...s, orderId: o.id }));
+                          setOrderLabel(o.orderNumber);
+                          setOrderPickerOpen(false);
+                          void fetchOrderItems();
+                        }}>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{o.orderNumber}</span>
+                            {o.customerEmail ? (<span className="text-muted-foreground text-xs">{o.customerEmail}</span>) : null}
                           </div>
-                        ))}
-                      </div>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </CommandDialog>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>RMA Number</Label>
+                <Input value={form.rmaNumber} onChange={(e) => setForm((s) => ({ ...s, rmaNumber: e.target.value }))} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Status</Label>
+                <Select value={form.status} onValueChange={(v) => setForm((s) => ({ ...s, status: v }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="requested">Requested</SelectItem>
+                    <SelectItem value="approved">Approved</SelectItem>
+                    <SelectItem value="received">Received</SelectItem>
+                    <SelectItem value="refunded">Refunded</SelectItem>
+                    <SelectItem value="rejected">Rejected</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1.5 sm:col-span-2">
+                <Label>Reason</Label>
+                <Input value={form.reason} onChange={(e) => setForm((s) => ({ ...s, reason: e.target.value }))} />
+              </div>
+              <div className="flex flex-col gap-1.5 sm:col-span-2">
+                <Label>Notes</Label>
+                <Input value={form.notes} onChange={(e) => setForm((s) => ({ ...s, notes: e.target.value }))} />
+              </div>
+              {orderItems.length > 0 && (
+                <div className="sm:col-span-2">
+                  <Label>Items to Return</Label>
+                  <div className="mt-2 max-h-56 overflow-auto rounded border p-2">
+                    <div className="grid grid-cols-1 gap-2">
+                      {orderItems.map((it) => (
+                        <div key={it.id} className="flex items-center justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-medium">{it.productName}</div>
+                            <div className="text-muted-foreground text-xs">Qty: {it.quantity}</div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Label className="text-xs">Qty</Label>
+                            <Input
+                              className="w-20"
+                              type="number"
+                              min={0}
+                              max={it.quantity}
+                              value={selected[it.id]?.qty ?? 0}
+                              onChange={(e) => {
+                                const v = Math.max(0, Math.min(Number(e.target.value || 0), it.quantity));
+                                setSelected((s) => ({ ...s, [it.id]: { qty: v, reason: s[it.id]?.reason || "" } }));
+                              }}
+                            />
+                            <Label className="text-xs">Reason</Label>
+                            <Input
+                              className="w-48"
+                              value={selected[it.id]?.reason ?? ""}
+                              onChange={(e) => setSelected((s) => ({ ...s, [it.id]: { qty: s[it.id]?.qty || 0, reason: e.target.value } }))}
+                            />
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
+            </div>
           </FormModal>
         </div>
       </div>

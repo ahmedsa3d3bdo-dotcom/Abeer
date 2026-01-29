@@ -51,7 +51,7 @@ export interface SummaryItem {
     label: string;
     value: string | number;
     change?: number;
-    format?: "currency" | "number" | "percentage";
+    format?: "currency" | "number" | "percentage" | "text";
 }
 
 /**

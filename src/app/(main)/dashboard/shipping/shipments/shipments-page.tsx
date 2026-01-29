@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { RefreshCcw, Truck, CheckCircle2, Clock, Navigation, Package, XCircle, Reply, Calendar, Printer } from "lucide-react";
+import Link from "next/link";
+import { RefreshCcw, Truck, CheckCircle2, Clock, Navigation, Package, XCircle, Reply, Calendar, Download } from "lucide-react";
 import { toast } from "sonner";
 
 import { MetricCard } from "@/components/common/metric-card";
@@ -14,14 +15,6 @@ import { DataTable } from "@/components/data-table/data-table";
 import { DataTablePagination } from "@/components/data-table/data-table-pagination";
 import { useDataTableInstance } from "@/hooks/use-data-table-instance";
 import { useNewNotifications } from "@/hooks/use-new-notifications";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { usePrint } from "@/components/common/print/print-provider";
 import { FormModal } from "@/components/ui/form-modal";
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 
@@ -34,9 +27,6 @@ export default function ShipmentsPage() {
   const [items, setItems] = useState<ShipmentRow[]>([]);
   const [total, setTotal] = useState(0);
   const [metrics, setMetrics] = useState<any | null>(null);
-
-  const { print, isPrinting } = usePrint();
-  const [printPreparing, setPrintPreparing] = useState(false);
 
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<string>("all");
@@ -89,122 +79,6 @@ export default function ShipmentsPage() {
     }
   }
 
-  function getListParamsBase(extra: { page?: number; limit?: number } = {}) {
-    const params = new URLSearchParams();
-    if (q) params.set("q", q);
-    if (status !== "all") params.set("status", status);
-    if (dateFrom) params.set("dateFrom", dateFrom);
-    if (dateTo) params.set("dateTo", dateTo);
-    params.set("sort", "createdAt.desc");
-    if (typeof extra.page === "number") params.set("page", String(extra.page));
-    if (typeof extra.limit === "number") params.set("limit", String(extra.limit));
-    return params;
-  }
-
-  async function fetchAllShipmentsMatchingFilters() {
-    const limit = 100;
-    let page = 1;
-    let all: ShipmentRow[] = [];
-    let expectedTotal: number | null = null;
-
-    while (true) {
-      const params = getListParamsBase({ page, limit });
-      const res = await fetch(`/api/v1/shipments?${params.toString()}`, { cache: "no-store" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error?.message || "Failed to load shipments");
-      const batch: ShipmentRow[] = (data.data?.items || []).map((s: any) => ({ ...s }));
-      expectedTotal = expectedTotal ?? Number(data.data?.total || 0);
-      all = all.concat(batch);
-      if (batch.length < limit) break;
-      if (expectedTotal !== null && all.length >= expectedTotal) break;
-      page += 1;
-      if (page > 200) break;
-    }
-    return all;
-  }
-
-  async function printAllShipments() {
-    try {
-      setPrintPreparing(true);
-      const all = await fetchAllShipmentsMatchingFilters();
-      setPrintPreparing(false);
-      void print(
-        <div className="p-6">
-          <div className="text-lg font-semibold">Shipments</div>
-          <div className="mt-1 text-xs text-muted-foreground">Total: {all.length}</div>
-          <div className="mt-4 rounded-md border">
-            <div className="grid grid-cols-12 gap-2 border-b p-2 text-xs text-muted-foreground">
-              <div className="col-span-3">Order</div>
-              <div className="col-span-3">Method</div>
-              <div className="col-span-2">Tracking</div>
-              <div className="col-span-2">Carrier</div>
-              <div className="col-span-2">Status</div>
-            </div>
-            {all.map((s) => (
-              <div key={s.id} className="grid grid-cols-12 gap-2 border-b p-2 text-sm">
-                <div className="col-span-3 font-medium">#{s.orderNumber || "—"}</div>
-                <div className="col-span-3">{s.methodName || "—"}</div>
-                <div className="col-span-2">{s.trackingNumber || "—"}</div>
-                <div className="col-span-2">{s.carrier || "—"}</div>
-                <div className="col-span-2 capitalize">{s.status}</div>
-              </div>
-            ))}
-          </div>
-        </div>,
-      );
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to prepare print");
-      setPrintPreparing(false);
-    }
-  }
-
-  async function printSelectedShipments() {
-    const selectedIds = Object.keys((table as any)?.getState?.().rowSelection || {});
-    if (!selectedIds.length) {
-      toast.error("Select at least one shipment to print");
-      return;
-    }
-    try {
-      setPrintPreparing(true);
-      const details = await Promise.all(
-        selectedIds.map(async (id) => {
-          const res = await fetch(`/api/v1/shipments/${id}`, { cache: "no-store" });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data?.error?.message || `Failed to load shipment ${id}`);
-          return data.data;
-        }),
-      );
-      setPrintPreparing(false);
-      void print(
-        <div className="p-6">
-          <div className="text-lg font-semibold">Shipments (Selected)</div>
-          <div className="mt-1 text-xs text-muted-foreground">Total: {details.length}</div>
-          <div className="mt-4 rounded-md border">
-            <div className="grid grid-cols-12 gap-2 border-b p-2 text-xs text-muted-foreground">
-              <div className="col-span-3">Order</div>
-              <div className="col-span-3">Method</div>
-              <div className="col-span-2">Tracking</div>
-              <div className="col-span-2">Carrier</div>
-              <div className="col-span-2">Status</div>
-            </div>
-            {details.map((s: any) => (
-              <div key={s.id} className="grid grid-cols-12 gap-2 border-b p-2 text-sm">
-                <div className="col-span-3 font-medium">#{s.orderNumber || "—"}</div>
-                <div className="col-span-3">{s.methodName || "—"}</div>
-                <div className="col-span-2">{s.trackingNumber || "—"}</div>
-                <div className="col-span-2">{s.carrier || "—"}</div>
-                <div className="col-span-2 capitalize">{s.status}</div>
-              </div>
-            ))}
-          </div>
-        </div>,
-      );
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to prepare print");
-      setPrintPreparing(false);
-    }
-  }
-
   const table = useDataTableInstance({
     data: items,
     columns,
@@ -236,7 +110,7 @@ export default function ShipmentsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error?.message || "Failed to load metrics");
       setMetrics(data.data || null);
-    } catch {}
+    } catch { }
   }
 
   async function fetchItems() {
@@ -342,18 +216,11 @@ export default function ShipmentsPage() {
             <RefreshCcw className="mr-1 h-4 w-4" /> Refresh
           </Button>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" disabled={loading || printPreparing || isPrinting}>
-                <Printer className="mr-1 h-4 w-4" /> Print
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => void printSelectedShipments()}>Print selected</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => void printAllShipments()}>Print all (matching filters)</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Link href="/dashboard/shipping/shipments/export">
+            <Button variant="outline" size="sm">
+              <Download className="mr-1 h-4 w-4" /> Export
+            </Button>
+          </Link>
         </div>
       </div>
 
@@ -377,41 +244,41 @@ export default function ShipmentsPage() {
         submitText="Save"
         onSubmit={onSubmit}
       >
-          <div className="grid gap-3 py-2">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="flex flex-col gap-1.5">
-                <Label>Status</Label>
-                <Select value={form.status} onValueChange={(v) => setForm((s) => ({ ...s, status: v }))}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="processing">Processing</SelectItem>
-                    <SelectItem value="in_transit">In Transit</SelectItem>
-                    <SelectItem value="out_for_delivery">Out for delivery</SelectItem>
-                    <SelectItem value="delivered">Delivered</SelectItem>
-                    <SelectItem value="failed">Failed</SelectItem>
-                    <SelectItem value="returned">Returned</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label>Tracking Number</Label>
-                <Input value={form.trackingNumber} onChange={(e) => setForm((s) => ({ ...s, trackingNumber: e.target.value }))} />
-              </div>
+        <div className="grid gap-3 py-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <Label>Status</Label>
+              <Select value={form.status} onValueChange={(v) => setForm((s) => ({ ...s, status: v }))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="processing">Processing</SelectItem>
+                  <SelectItem value="in_transit">In Transit</SelectItem>
+                  <SelectItem value="out_for_delivery">Out for delivery</SelectItem>
+                  <SelectItem value="delivered">Delivered</SelectItem>
+                  <SelectItem value="failed">Failed</SelectItem>
+                  <SelectItem value="returned">Returned</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="flex flex-col gap-1.5">
-                <Label>Carrier</Label>
-                <Input value={form.carrier} onChange={(e) => setForm((s) => ({ ...s, carrier: e.target.value }))} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label>Notes</Label>
-                <Input value={form.notes} onChange={(e) => setForm((s) => ({ ...s, notes: e.target.value }))} />
-              </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>Tracking Number</Label>
+              <Input value={form.trackingNumber} onChange={(e) => setForm((s) => ({ ...s, trackingNumber: e.target.value }))} />
             </div>
           </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <Label>Carrier</Label>
+              <Input value={form.carrier} onChange={(e) => setForm((s) => ({ ...s, carrier: e.target.value }))} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>Notes</Label>
+              <Input value={form.notes} onChange={(e) => setForm((s) => ({ ...s, notes: e.target.value }))} />
+            </div>
+          </div>
+        </div>
       </FormModal>
 
       <ConfirmDeleteDialog

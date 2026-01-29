@@ -17,7 +17,7 @@ export type ExportFormat = "pdf" | "xlsx" | "csv";
 export interface AdminExportConfig {
     id: string;
     name: string;
-    type: "orders" | "products" | "customers" | "discounts" | "users" | "reviews" | "general";
+    type: "orders" | "products" | "customers" | "discounts" | "users" | "reviews" | "refunds" | "categories" | "shipments" | "returns" | "auditLogs" | "permissions" | "systemLogs" | "notifications" | "general";
     description: string;
     formats: ExportFormat[];
     fields: string[];
@@ -210,6 +210,55 @@ export const ADMIN_EXPORT_COLUMNS = {
             { header: "Title", key: "title", width: 25 },
             { header: "Status", key: "status", width: 12 },
             { header: "Date", key: "createdAt", format: "date" as const, width: 14 },
+        ],
+    },
+    refunds: {
+        all: [
+            { header: "Order #", key: "orderNumber", width: 18 },
+            { header: "Amount", key: "amount", format: "currency" as const, align: "right" as const, width: 15 },
+            { header: "Reason", key: "reason", width: 30 },
+            { header: "Status", key: "status", width: 12 },
+            { header: "Requested", key: "createdAt", format: "date" as const, width: 14 },
+            { header: "Processed", key: "processedAt", format: "date" as const, width: 14 },
+        ],
+    },
+    categories: {
+        all: [
+            { header: "Name", key: "name", width: 25 },
+            { header: "Slug", key: "slug", width: 25 },
+            { header: "Parent", key: "parentName", width: 20 },
+            { header: "Products", key: "productCount", format: "number" as const, align: "center" as const, width: 12 },
+            { header: "Status", key: "status", width: 12 },
+            { header: "Created", key: "createdAt", format: "date" as const, width: 14 },
+        ],
+    },
+    shipments: {
+        all: [
+            { header: "Tracking #", key: "trackingNumber", width: 22 },
+            { header: "Order #", key: "orderNumber", width: 18 },
+            { header: "Carrier", key: "carrier", width: 15 },
+            { header: "Status", key: "status", width: 12 },
+            { header: "Shipped", key: "shippedAt", format: "date" as const, width: 14 },
+            { header: "Delivered", key: "deliveredAt", format: "date" as const, width: 14 },
+        ],
+    },
+    returns: {
+        all: [
+            { header: "Order #", key: "orderNumber", width: 18 },
+            { header: "Reason", key: "reason", width: 30 },
+            { header: "Status", key: "status", width: 12 },
+            { header: "Items", key: "itemCount", format: "number" as const, align: "center" as const, width: 10 },
+            { header: "Requested", key: "createdAt", format: "date" as const, width: 14 },
+            { header: "Updated", key: "updatedAt", format: "date" as const, width: 14 },
+        ],
+    },
+    auditLogs: {
+        all: [
+            { header: "Action", key: "action", width: 18 },
+            { header: "User", key: "userName", width: 22 },
+            { header: "Resource", key: "resource", width: 18 },
+            { header: "Resource ID", key: "resourceId", width: 20 },
+            { header: "Date", key: "createdAt", format: "date" as const, width: 20 },
         ],
     },
 };

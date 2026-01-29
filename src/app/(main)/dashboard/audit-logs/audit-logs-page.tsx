@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { RefreshCcw, FileText, PlusSquare, Edit3, Trash2, LogIn, LogOut, Users, Layers, Calendar, Printer } from "lucide-react";
+import Link from "next/link";
+import { RefreshCcw, FileText, PlusSquare, Edit3, Trash2, LogIn, LogOut, Users, Layers, Calendar, Printer, Download } from "lucide-react";
 import { toast } from "sonner";
 
 import { MetricCard } from "@/components/common/metric-card";
@@ -15,13 +16,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DataTable } from "@/components/data-table/data-table";
 import { DataTablePagination } from "@/components/data-table/data-table-pagination";
 import { useDataTableInstance } from "@/hooks/use-data-table-instance";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { usePrint } from "@/components/common/print/print-provider";
 
 import { getAuditColumns, type AuditRow } from "./columns";
@@ -35,7 +29,6 @@ export default function AuditLogsPage() {
   const [metrics, setMetrics] = useState<any | null>(null);
 
   const { print, isPrinting } = usePrint();
-  const [printPreparing, setPrintPreparing] = useState(false);
 
   const [q, setQ] = useState("");
   const [resource, setResource] = useState("");
@@ -77,91 +70,6 @@ export default function AuditLogsPage() {
     },
   });
 
-  function getListParamsBase(extra: { page?: number; limit?: number } = {}) {
-    const params = new URLSearchParams();
-    if (q) params.set("q", q);
-    if (resource) params.set("resource", resource);
-    if (action) params.set("action", action);
-    if (user) params.set("user", user);
-    params.set("sort", "createdAt.desc");
-    if (typeof extra.page === "number") params.set("page", String(extra.page));
-    if (typeof extra.limit === "number") params.set("limit", String(extra.limit));
-    return params;
-  }
-
-  async function fetchAllAuditsMatchingFilters() {
-    const limit = 100;
-    let page = 1;
-    let all: AuditRow[] = [];
-    let expectedTotal: number | null = null;
-
-    while (true) {
-      const params = getListParamsBase({ page, limit });
-      const res = await fetch(`/api/v1/audit?${params.toString()}`, { cache: "no-store" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error?.message || "Failed to load audit logs");
-      const batch: AuditRow[] = (data.data?.items || []).map((r: any) => ({ ...r }));
-      expectedTotal = expectedTotal ?? Number(data.data?.total || 0);
-      all = all.concat(batch);
-      if (batch.length < limit) break;
-      if (expectedTotal !== null && all.length >= expectedTotal) break;
-      page += 1;
-      if (page > 200) break;
-    }
-    return all;
-  }
-
-  function renderAuditPrint(rows: AuditRow[], title: string) {
-    return (
-      <div className="p-6">
-        <div className="text-lg font-semibold">{title}</div>
-        <div className="mt-1 text-xs text-muted-foreground">Total: {rows.length}</div>
-        <div className="mt-4 rounded-md border">
-          <div className="grid grid-cols-12 gap-2 border-b p-2 text-xs text-muted-foreground">
-            <div className="col-span-2">Action</div>
-            <div className="col-span-3">Resource</div>
-            <div className="col-span-3">User</div>
-            <div className="col-span-2">IP</div>
-            <div className="col-span-2">Date</div>
-          </div>
-          {rows.map((a) => (
-            <div key={a.id} className="grid grid-cols-12 gap-2 border-b p-2 text-sm">
-              <div className="col-span-2 capitalize">{a.action}</div>
-              <div className="col-span-3">
-                <div className="font-medium">{a.resource}</div>
-                <div className="text-xs text-muted-foreground">{a.resourceId || "—"}</div>
-              </div>
-              <div className="col-span-3">{a.userEmail || "-"}</div>
-              <div className="col-span-2">{a.ipAddress || "-"}</div>
-              <div className="col-span-2">{a.createdAt ? new Date(a.createdAt as any).toLocaleString() : "—"}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  async function printSelectedAudits() {
-    const selected = (table as any).getSelectedRowModel?.().rows?.map((r: any) => r.original as AuditRow) || [];
-    if (!selected.length) {
-      toast.error("Select at least one audit log to print");
-      return;
-    }
-    void print(renderAuditPrint(selected, "Audit Logs (Selected)"));
-  }
-
-  async function printAllAudits() {
-    try {
-      setPrintPreparing(true);
-      const all = await fetchAllAuditsMatchingFilters();
-      setPrintPreparing(false);
-      void print(renderAuditPrint(all, "Audit Logs"));
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to prepare print");
-      setPrintPreparing(false);
-    }
-  }
-
   useEffect(() => {
     void fetchAudits();
     void fetchMetrics();
@@ -201,7 +109,7 @@ export default function AuditLogsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error?.message || "Failed to load metrics");
       setMetrics(data.data || null);
-    } catch {}
+    } catch { }
   }
 
   return (
@@ -252,18 +160,11 @@ export default function AuditLogsPage() {
             <RefreshCcw className="mr-1 h-4 w-4" /> Refresh
           </Button>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" disabled={loading || printPreparing || isPrinting}>
-                <Printer className="mr-1 h-4 w-4" /> Print
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => void printSelectedAudits()}>Print selected</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => void printAllAudits()}>Print all (matching filters)</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Link href="/dashboard/audit-logs/export">
+            <Button variant="outline" size="sm">
+              <Download className="mr-1 h-4 w-4" /> Export
+            </Button>
+          </Link>
         </div>
       </div>
 
@@ -323,7 +224,7 @@ export default function AuditLogsPage() {
                     </div>,
                   );
                 }}
-                disabled={loading || isPrinting || printPreparing || !viewing}
+                disabled={loading || isPrinting || !viewing}
               >
                 <Printer className="mr-1 h-4 w-4" /> Print
               </Button>

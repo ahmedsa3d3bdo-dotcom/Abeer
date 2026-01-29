@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, RefreshCcw, Users, UserPlus, UserCheck, Repeat, DollarSign, Printer } from "lucide-react";
+import { Plus, RefreshCcw, Users, UserPlus, UserCheck, Repeat, DollarSign } from "lucide-react";
 import { toast } from "sonner";
 import { MetricCard } from "@/components/common/metric-card";
 import { UniversalBadge } from "@/components/common/universal-badge";
@@ -10,13 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { DataTable } from "@/components/data-table/data-table";
 import { DataTablePagination } from "@/components/data-table/data-table-pagination";
 import { useDataTableInstance } from "@/hooks/use-data-table-instance";
@@ -27,7 +20,6 @@ import { Badge } from "@/components/ui/badge";
 import { LocalDate } from "@/components/common/local-datetime";
 import { useNewNotifications } from "@/hooks/use-new-notifications";
 import { formatCurrency } from "@/lib/utils";
-import { usePrint } from "@/components/common/print/print-provider";
 import { FormModal } from "@/components/ui/form-modal";
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 import Link from "next/link";
@@ -40,9 +32,6 @@ export default function CustomersPage() {
   const [items, setItems] = useState<CustomerRow[]>([]);
   const [total, setTotal] = useState(0);
   const [currency, setCurrency] = useState<string>("CAD");
-
-  const { print, isPrinting } = usePrint();
-  const [printPreparing, setPrintPreparing] = useState(false);
 
   const [q, setQ] = useState("");
   const [status, setStatus] = useState<string>("all");
@@ -103,164 +92,6 @@ export default function CustomersPage() {
       toast.error(e.message || "Delete failed");
     } finally {
       setDeleting(false);
-    }
-  }
-
-  function getListParamsBase(extra: { page?: number; limit?: number } = {}) {
-    const params = new URLSearchParams();
-    if (q) params.set("q", q);
-    if (status !== "all") params.set("isActive", String(status === "active"));
-    params.set("sort", "createdAt.desc");
-    if (typeof extra.page === "number") params.set("page", String(extra.page));
-    if (typeof extra.limit === "number") params.set("limit", String(extra.limit));
-    return params;
-  }
-
-  async function fetchAllCustomersMatchingFilters() {
-    const limit = 100;
-    let page = 1;
-    let all: CustomerRow[] = [];
-    let expectedTotal: number | null = null;
-
-    while (true) {
-      const params = getListParamsBase({ page, limit });
-      const res = await fetch(`/api/v1/customers?${params.toString()}`, { cache: "no-store" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error?.message || "Failed to load customers");
-      const batch: CustomerRow[] = (data.data?.items || []).map((u: any) => ({
-        id: u.id,
-        email: u.email,
-        firstName: u.firstName,
-        lastName: u.lastName,
-        isActive: u.isActive,
-        createdAt: u.createdAt,
-        ordersCount: u.ordersCount,
-        totalSpent: Number(u.totalSpent ?? 0),
-        avgOrderValue: Number(u.avgOrderValue ?? 0),
-        lastOrderAt: u.lastOrderAt,
-      }));
-      expectedTotal = expectedTotal ?? Number(data.data?.total || 0);
-      all = all.concat(batch);
-      if (data.data?.currency) setCurrency(data.data.currency);
-      if (batch.length < limit) break;
-      if (expectedTotal !== null && all.length >= expectedTotal) break;
-      page += 1;
-      if (page > 200) break;
-    }
-
-    return all;
-  }
-
-  async function printAllCustomers() {
-    try {
-      setPrintPreparing(true);
-      const all = await fetchAllCustomersMatchingFilters();
-      setPrintPreparing(false);
-      const c = currency;
-
-      void print(
-        <div className="p-6">
-          <div className="text-lg font-semibold">Customers</div>
-          <div className="mt-1 text-xs text-muted-foreground">Total: {all.length}</div>
-          <div className="mt-4 rounded-md border">
-            <div className="grid grid-cols-12 gap-2 border-b p-2 text-xs text-muted-foreground">
-              <div className="col-span-4">Customer</div>
-              <div className="col-span-2">Status</div>
-              <div className="col-span-2 text-right">Orders</div>
-              <div className="col-span-2 text-right">Spent</div>
-              <div className="col-span-2 text-right">AOV</div>
-            </div>
-            {all.map((u) => (
-              <div key={u.id} className="grid grid-cols-12 gap-2 border-b p-2 text-sm">
-                <div className="col-span-4">
-                  <div className="font-medium">
-                    {u.firstName || u.lastName ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() : u.email}
-                  </div>
-                  <div className="text-xs text-muted-foreground">{u.email}</div>
-                </div>
-                <div className="col-span-2">{u.isActive ? "Active" : "Inactive"}</div>
-                <div className="col-span-2 text-right">{u.ordersCount ?? 0}</div>
-                <div className="col-span-2 text-right">{formatCurrency(Number(u.totalSpent ?? 0), { currency: c, locale: "en-CA" })}</div>
-                <div className="col-span-2 text-right">{formatCurrency(Number(u.avgOrderValue ?? 0), { currency: c, locale: "en-CA" })}</div>
-              </div>
-            ))}
-          </div>
-        </div>,
-      );
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to prepare print");
-      setPrintPreparing(false);
-    }
-  }
-
-  async function printSelectedCustomers() {
-    const selectedIds = Object.keys((table as any)?.getState?.().rowSelection || {});
-    if (!selectedIds.length) {
-      toast.error("Select at least one customer to print");
-      return;
-    }
-
-    try {
-      setPrintPreparing(true);
-      const details = await Promise.all(
-        selectedIds.map(async (id) => {
-          const res = await fetch(`/api/v1/customers/${id}`, { cache: "no-store" });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data?.error?.message || `Failed to load customer ${id}`);
-          return data.data;
-        }),
-      );
-      setPrintPreparing(false);
-
-      const c = details.find((d: any) => d?.currency)?.currency || currency;
-      void print(
-        <div className="p-6">
-          <div className="text-lg font-semibold">Customers (Selected)</div>
-          <div className="mt-1 text-xs text-muted-foreground">Total: {details.length}</div>
-          {details.map((d: any, idx: number) => {
-            const u = d?.user;
-            const a = d?.aggregates;
-            const title = u
-              ? (u.firstName || u.lastName ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() : u.email)
-              : "Customer";
-            return (
-              <div key={String(u?.id || idx)} className={idx === details.length - 1 ? "" : "print-page-break"}>
-                <div className="mt-4 rounded-md border p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="text-base font-semibold">{title}</div>
-                      <div className="text-sm text-muted-foreground">{u?.email}</div>
-                      {u?.phone ? <div className="text-sm text-muted-foreground">{u.phone}</div> : null}
-                    </div>
-                    <div className="text-sm">{u?.isActive ? "Active" : "Inactive"}</div>
-                  </div>
-                  <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                    <div className="rounded-md border p-3">
-                      <div className="text-xs text-muted-foreground">Orders</div>
-                      <div className="font-medium">{Number(a?.ordersCount ?? 0)}</div>
-                    </div>
-                    <div className="rounded-md border p-3">
-                      <div className="text-xs text-muted-foreground">Total spent</div>
-                      <div className="font-medium">{formatCurrency(Number(a?.totalSpent ?? 0), { currency: c, locale: "en-CA" })}</div>
-                    </div>
-                    <div className="rounded-md border p-3">
-                      <div className="text-xs text-muted-foreground">AOV</div>
-                      <div className="font-medium">{formatCurrency(Number(a?.avgOrderValue ?? 0), { currency: c, locale: "en-CA" })}</div>
-                    </div>
-                    <div className="rounded-md border p-3">
-                      <div className="text-xs text-muted-foreground">Joined</div>
-                      <div className="font-medium">{u?.createdAt ? <LocalDate value={u.createdAt} /> : "—"}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>,
-      );
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to prepare print");
-      setPrintPreparing(false);
     }
   }
 
@@ -440,19 +271,6 @@ export default function CustomersPage() {
           <Button variant="outline" onClick={() => void fetchCustomers()} disabled={loading}>
             <RefreshCcw className="mr-1 h-4 w-4" /> Refresh
           </Button>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" disabled={loading || printPreparing || isPrinting}>
-                <Printer className="mr-1 h-4 w-4" /> Print
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => void printSelectedCustomers()}>Print selected</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => void printAllCustomers()}>Print all (matching filters)</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
 
           <Link href="/dashboard/customers/export">
             <Button variant="outline" size="sm">

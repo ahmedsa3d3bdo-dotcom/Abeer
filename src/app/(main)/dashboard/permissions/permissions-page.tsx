@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, RefreshCcw, ShieldCheck, Layers, ListChecks, Users, Ban, CalendarPlus, Printer } from "lucide-react";
+import Link from "next/link";
+import { Plus, RefreshCcw, ShieldCheck, Layers, ListChecks, Users, Ban, CalendarPlus, Download } from "lucide-react";
 import { toast } from "sonner";
 
 import { MetricCard } from "@/components/common/metric-card";
@@ -13,14 +14,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DataTable } from "@/components/data-table/data-table";
 import { DataTablePagination } from "@/components/data-table/data-table-pagination";
 import { useDataTableInstance } from "@/hooks/use-data-table-instance";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { usePrint } from "@/components/common/print/print-provider";
 import { FormModal } from "@/components/ui/form-modal";
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 
@@ -33,9 +26,6 @@ export default function PermissionsPage() {
   const [items, setItems] = useState<PermissionRow[]>([]);
   const [total, setTotal] = useState(0);
   const [metrics, setMetrics] = useState<any | null>(null);
-
-  const { print, isPrinting } = usePrint();
-  const [printPreparing, setPrintPreparing] = useState(false);
 
   const [q, setQ] = useState("");
   const [resource, setResource] = useState<string>("all");
@@ -111,85 +101,6 @@ export default function PermissionsPage() {
     },
   });
 
-  function getListParamsBase(extra: { page?: number; limit?: number } = {}) {
-    const params = new URLSearchParams();
-    if (q) params.set("q", q);
-    if (resource !== "all") params.set("resource", resource);
-    params.set("sort", "createdAt.desc");
-    if (typeof extra.page === "number") params.set("page", String(extra.page));
-    if (typeof extra.limit === "number") params.set("limit", String(extra.limit));
-    return params;
-  }
-
-  async function fetchAllPermissionsMatchingFilters() {
-    const limit = 100;
-    let page = 1;
-    let all: PermissionRow[] = [];
-    let expectedTotal: number | null = null;
-
-    while (true) {
-      const params = getListParamsBase({ page, limit });
-      const res = await fetch(`/api/v1/permissions?${params.toString()}`, { cache: "no-store" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error?.message || "Failed to load permissions");
-      const batch: PermissionRow[] = (data.data?.items || []).map((p: any) => ({ ...p, createdAt: p.createdAt }));
-      expectedTotal = expectedTotal ?? Number(data.data?.total || 0);
-      all = all.concat(batch);
-      if (batch.length < limit) break;
-      if (expectedTotal !== null && all.length >= expectedTotal) break;
-      page += 1;
-      if (page > 200) break;
-    }
-    return all;
-  }
-
-  function renderPermissionsPrint(rows: PermissionRow[], title: string) {
-    return (
-      <div className="p-6">
-        <div className="text-lg font-semibold">{title}</div>
-        <div className="mt-1 text-xs text-muted-foreground">Total: {rows.length}</div>
-        <div className="mt-4 rounded-md border">
-          <div className="grid grid-cols-12 gap-2 border-b p-2 text-xs text-muted-foreground">
-            <div className="col-span-5">Permission</div>
-            <div className="col-span-5">Scope</div>
-            <div className="col-span-2">Created</div>
-          </div>
-          {rows.map((p) => (
-            <div key={p.id} className="grid grid-cols-12 gap-2 border-b p-2 text-sm">
-              <div className="col-span-5">
-                <div className="font-medium">{p.name}</div>
-                <div className="text-xs text-muted-foreground">{p.slug}</div>
-              </div>
-              <div className="col-span-5">{p.resource}.{p.action}</div>
-              <div className="col-span-2">{p.createdAt ? new Date(p.createdAt as any).toLocaleDateString() : "—"}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  async function printSelectedPermissions() {
-    const selected = (table as any).getSelectedRowModel?.().rows?.map((r: any) => r.original as PermissionRow) || [];
-    if (!selected.length) {
-      toast.error("Select at least one permission to print");
-      return;
-    }
-    void print(renderPermissionsPrint(selected, "Permissions (Selected)"));
-  }
-
-  async function printAllPermissions() {
-    try {
-      setPrintPreparing(true);
-      const all = await fetchAllPermissionsMatchingFilters();
-      setPrintPreparing(false);
-      void print(renderPermissionsPrint(all, "Permissions"));
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to prepare print");
-      setPrintPreparing(false);
-    }
-  }
-
   useEffect(() => {
     void fetchResources();
   }, []);
@@ -208,7 +119,7 @@ export default function PermissionsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error?.message || "Failed to load metrics");
       setMetrics(data.data || null);
-    } catch {}
+    } catch { }
   }
 
   async function fetchResources() {
@@ -311,18 +222,11 @@ export default function PermissionsPage() {
             <RefreshCcw className="mr-1 h-4 w-4" /> Refresh
           </Button>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" disabled={loading || printPreparing || isPrinting}>
-                <Printer className="mr-1 h-4 w-4" /> Print
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => void printSelectedPermissions()}>Print selected</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => void printAllPermissions()}>Print all (matching filters)</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Link href="/dashboard/permissions/export">
+            <Button variant="outline" size="sm">
+              <Download className="mr-1 h-4 w-4" /> Export
+            </Button>
+          </Link>
 
           <FormModal
             open={open}

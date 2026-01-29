@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, RefreshCcw, Users as UsersIcon, CheckCircle2, PauseCircle, Calendar, MailCheck, Image as ImageIcon, LogIn, Printer } from "lucide-react";
+import Link from "next/link";
+import { Plus, RefreshCcw, Users as UsersIcon, CheckCircle2, PauseCircle, Calendar, MailCheck, Image as ImageIcon, LogIn, Download } from "lucide-react";
 import { toast } from "sonner";
 
 import { MetricCard } from "@/components/common/metric-card";
@@ -15,14 +16,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { DataTable } from "@/components/data-table/data-table";
 import { DataTablePagination } from "@/components/data-table/data-table-pagination";
 import { useDataTableInstance } from "@/hooks/use-data-table-instance";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { usePrint } from "@/components/common/print/print-provider";
 import { FormModal } from "@/components/ui/form-modal";
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 import { AppDialogContent } from "@/components/ui/app-dialog";
@@ -37,9 +30,6 @@ const DEFAULT_LIMIT = 10;
 export default function UsersPage() {
   const [loading, setLoading] = useState(false);
   const [roles, setRoles] = useState<RoleOption[]>([]);
-
-  const { print, isPrinting } = usePrint();
-  const [printPreparing, setPrintPreparing] = useState(false);
 
   // Table data
   const [items, setItems] = useState<UserRow[]>([]);
@@ -169,88 +159,6 @@ export default function UsersPage() {
     },
   });
 
-  function getListParamsBase(extra: { page?: number; limit?: number } = {}) {
-    const params = new URLSearchParams();
-    if (q) params.set("q", q);
-    if (role) params.set("role", role);
-    if (isActive !== "all") params.set("isActive", String(isActive === "active"));
-    params.set("sort", "createdAt.desc");
-    if (typeof extra.page === "number") params.set("page", String(extra.page));
-    if (typeof extra.limit === "number") params.set("limit", String(extra.limit));
-    return params;
-  }
-
-  async function fetchAllUsersMatchingFilters() {
-    const limit = 100;
-    let page = 1;
-    let all: UserRow[] = [];
-    let expectedTotal: number | null = null;
-
-    while (true) {
-      const params = getListParamsBase({ page, limit });
-      const res = await fetch(`/api/v1/users?${params.toString()}`, { cache: "no-store" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error?.message || "Failed to load users");
-      const batch: UserRow[] = (data.data?.items || []).map((u: any) => ({ ...u, createdAt: u.createdAt }));
-      expectedTotal = expectedTotal ?? Number(data.data?.total || 0);
-      all = all.concat(batch);
-      if (batch.length < limit) break;
-      if (expectedTotal !== null && all.length >= expectedTotal) break;
-      page += 1;
-      if (page > 200) break;
-    }
-    return all;
-  }
-
-  function renderUsersPrint(rows: UserRow[], title: string) {
-    return (
-      <div className="p-6">
-        <div className="text-lg font-semibold">{title}</div>
-        <div className="mt-1 text-xs text-muted-foreground">Total: {rows.length}</div>
-        <div className="mt-4 rounded-md border">
-          <div className="grid grid-cols-12 gap-2 border-b p-2 text-xs text-muted-foreground">
-            <div className="col-span-5">User</div>
-            <div className="col-span-4">Roles</div>
-            <div className="col-span-1">Status</div>
-            <div className="col-span-2">Created</div>
-          </div>
-          {rows.map((u) => (
-            <div key={u.id} className="grid grid-cols-12 gap-2 border-b p-2 text-sm">
-              <div className="col-span-5">
-                <div className="font-medium">{u.firstName || u.lastName ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() : u.email}</div>
-                <div className="text-xs text-muted-foreground">{u.email}</div>
-              </div>
-              <div className="col-span-4">{(u.roles || []).map((r) => r.slug).join(", ") || "—"}</div>
-              <div className="col-span-1">{u.isActive ? "Active" : "Inactive"}</div>
-              <div className="col-span-2">{u.createdAt ? new Date(u.createdAt as any).toLocaleDateString() : "—"}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  async function printSelectedUsers() {
-    const selected = (table as any).getSelectedRowModel?.().rows?.map((r: any) => r.original as UserRow) || [];
-    if (!selected.length) {
-      toast.error("Select at least one user to print");
-      return;
-    }
-    void print(renderUsersPrint(selected, "Users (Selected)"));
-  }
-
-  async function printAllUsers() {
-    try {
-      setPrintPreparing(true);
-      const all = await fetchAllUsersMatchingFilters();
-      setPrintPreparing(false);
-      void print(renderUsersPrint(all, "Users"));
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to prepare print");
-      setPrintPreparing(false);
-    }
-  }
-
   // Table pagination state is synced via onPaginationChange above
 
   useEffect(() => {
@@ -273,7 +181,7 @@ export default function UsersPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error?.message || "Failed to load metrics");
       setMetrics(data.data || null);
-    } catch {}
+    } catch { }
   }
 
   async function fetchRoles() {
@@ -395,18 +303,11 @@ export default function UsersPage() {
             <RefreshCcw className="mr-1 h-4 w-4" /> Refresh
           </Button>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" disabled={loading || printPreparing || isPrinting}>
-                <Printer className="mr-1 h-4 w-4" /> Print
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => void printSelectedUsers()}>Print selected</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => void printAllUsers()}>Print all (matching filters)</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Link href="/dashboard/users/export">
+            <Button variant="outline" size="sm">
+              <Download className="mr-1 h-4 w-4" /> Export
+            </Button>
+          </Link>
 
           <FormModal
             open={open}
@@ -423,68 +324,68 @@ export default function UsersPage() {
             }
           >
             <div className="grid gap-3 py-2">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div className="flex flex-col gap-1.5">
-                    <Label>Email</Label>
-                    <Input
-                      type="email"
-                      value={form.email}
-                      onChange={(e) => setForm((s) => ({ ...s, email: e.target.value }))}
-                      placeholder="user@example.com"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label>Password{editing ? " (leave blank to keep)" : ""}</Label>
-                    <Input
-                      type="password"
-                      value={form.password}
-                      onChange={(e) => setForm((s) => ({ ...s, password: e.target.value }))}
-                      placeholder={editing ? "••••••••" : "Strong password"}
-                      disabled={!!editing}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div className="flex flex-col gap-1.5">
-                    <Label>First Name</Label>
-                    <Input value={form.firstName} onChange={(e) => setForm((s) => ({ ...s, firstName: e.target.value }))} />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label>Last Name</Label>
-                    <Input value={form.lastName} onChange={(e) => setForm((s) => ({ ...s, lastName: e.target.value }))} />
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="isActive"
-                    checked={form.isActive}
-                    onCheckedChange={(v) => setForm((s) => ({ ...s, isActive: Boolean(v) }))}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="flex flex-col gap-1.5">
+                  <Label>Email</Label>
+                  <Input
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => setForm((s) => ({ ...s, email: e.target.value }))}
+                    placeholder="user@example.com"
                   />
-                  <Label htmlFor="isActive">Active</Label>
                 </div>
-                <div className="flex flex-col gap-2">
-                  <Label>Roles</Label>
-                  <div className="flex flex-wrap gap-3">
-                    {roles.map((r) => {
-                      const checked = form.roles.includes(r.slug);
-                      return (
-                        <label key={r.slug} className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
-                          <Checkbox
-                            checked={checked}
-                            onCheckedChange={(v) =>
-                              setForm((s) => ({
-                                ...s,
-                                roles: v ? [...s.roles, r.slug] : s.roles.filter((x) => x !== r.slug),
-                              }))
-                            }
-                          />
-                          <span className="capitalize">{r.name}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label>Password{editing ? " (leave blank to keep)" : ""}</Label>
+                  <Input
+                    type="password"
+                    value={form.password}
+                    onChange={(e) => setForm((s) => ({ ...s, password: e.target.value }))}
+                    placeholder={editing ? "••••••••" : "Strong password"}
+                    disabled={!!editing}
+                  />
                 </div>
               </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="flex flex-col gap-1.5">
+                  <Label>First Name</Label>
+                  <Input value={form.firstName} onChange={(e) => setForm((s) => ({ ...s, firstName: e.target.value }))} />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label>Last Name</Label>
+                  <Input value={form.lastName} onChange={(e) => setForm((s) => ({ ...s, lastName: e.target.value }))} />
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="isActive"
+                  checked={form.isActive}
+                  onCheckedChange={(v) => setForm((s) => ({ ...s, isActive: Boolean(v) }))}
+                />
+                <Label htmlFor="isActive">Active</Label>
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label>Roles</Label>
+                <div className="flex flex-wrap gap-3">
+                  {roles.map((r) => {
+                    const checked = form.roles.includes(r.slug);
+                    return (
+                      <label key={r.slug} className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={(v) =>
+                            setForm((s) => ({
+                              ...s,
+                              roles: v ? [...s.roles, r.slug] : s.roles.filter((x) => x !== r.slug),
+                            }))
+                          }
+                        />
+                        <span className="capitalize">{r.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
           </FormModal>
         </div>
       </div>
