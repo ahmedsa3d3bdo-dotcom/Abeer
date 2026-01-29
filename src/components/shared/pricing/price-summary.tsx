@@ -84,14 +84,28 @@ export function PriceSummary({
             {showDetails && (
                 <>
                     {/* Automatic promotions (BXGY, scheduled) with monetary value */}
-                    {totals.promotionDiscounts.map((d) =>
-                        d.amount > 0 ? (
+                    {/* Skip if promotionSavings already accounts for their value (from line-item reductions/gifts) */}
+                    {totals.promotionDiscounts.map((d) => {
+                        // Skip BXGY and bundle deals when promotionSavings includes line-item savings
+                        // These are already shown via "Promotion savings" from item-level calculations
+                        const isBxgy = d.metadata?.offerKind === "bxgy_generic" || d.metadata?.offerKind === "bxgy_bundle";
+                        const isBundleOffer = d.metadata?.kind === "offer" && d.metadata?.offerKind === "bundle";
+                        const isScheduledOffer = d.metadata?.kind === "offer" && d.metadata?.offerKind !== "bundle";
+
+                        // If we have promotionSavings (line-level), skip these to avoid double display
+                        if ((isBxgy || isBundleOffer || isScheduledOffer) && totals.promotionSavings > 0) {
+                            return null;
+                        }
+
+                        if (d.amount <= 0) return null;
+
+                        return (
                             <div key={d.id} className="flex justify-between">
                                 <span className={discountColor}>{getDiscountLabel(d)}</span>
                                 <span className={discountColor}>-{fmt(d.amount)}</span>
                             </div>
-                        ) : null,
-                    )}
+                        );
+                    })}
 
                     {/* Coupon discounts */}
                     {totals.couponDiscounts.map((d) => (
@@ -206,15 +220,26 @@ export function InvoicePriceSummary({ totals, currency = "CAD", locale = "en-CA"
             )}
 
             {/* Promotion discounts (cart-level BXGY, offers) */}
-            {totals.promotionDiscounts.map(
-                (d) =>
-                    d.amount > 0 && (
-                        <div key={d.id} className="flex w-full max-w-sm justify-between">
-                            <span className={discountColor}>{getDiscountLabel(d)}</span>
-                            <span className={discountColor}>-{fmt(d.amount)}</span>
-                        </div>
-                    ),
-            )}
+            {/* Skip if promotionSavings already accounts for their value (from line-item reductions/gifts) */}
+            {totals.promotionDiscounts.map((d) => {
+                // Skip BXGY and bundle deals when promotionSavings includes line-item savings
+                const isBxgy = d.metadata?.offerKind === "bxgy_generic" || d.metadata?.offerKind === "bxgy_bundle";
+                const isBundleOffer = d.metadata?.kind === "offer" && d.metadata?.offerKind === "bundle";
+                const isScheduledOffer = d.metadata?.kind === "offer" && d.metadata?.offerKind !== "bundle";
+
+                if ((isBxgy || isBundleOffer || isScheduledOffer) && totals.promotionSavings > 0) {
+                    return null;
+                }
+
+                if (d.amount <= 0) return null;
+
+                return (
+                    <div key={d.id} className="flex w-full max-w-sm justify-between">
+                        <span className={discountColor}>{getDiscountLabel(d)}</span>
+                        <span className={discountColor}>-{fmt(d.amount)}</span>
+                    </div>
+                );
+            })}
 
             {/* Coupon discounts */}
             {totals.couponDiscounts.map((d) => (
