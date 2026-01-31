@@ -348,7 +348,7 @@ export default function ProductsExportPage() {
                                                 }
                                                 disabled={isCurrentlyExporting}
                                             >
-                                                <SelectTrigger className="w-24">
+                                                <SelectTrigger className="w-[100px]">
                                                     <SelectValue />
                                                 </SelectTrigger>
                                                 <SelectContent>

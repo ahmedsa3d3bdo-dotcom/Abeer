@@ -269,7 +269,7 @@ export default function CategoriesExportPage() {
                                                 }
                                                 disabled={isCurrentlyExporting}
                                             >
-                                                <SelectTrigger className="w-24">
+                                                <SelectTrigger className="w-[100px]">
                                                     <SelectValue />
                                                 </SelectTrigger>
                                                 <SelectContent>

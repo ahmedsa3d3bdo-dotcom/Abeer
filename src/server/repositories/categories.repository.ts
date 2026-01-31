@@ -22,7 +22,10 @@ export class CategoriesRepository {
 
     const orderBy = params.sort === "createdAt.asc" ? (schema.categories.createdAt as any) : sql`${schema.categories.createdAt} DESC`;
 
-    const items = await db
+    // Create alias for parent category self-join
+    const parentCategory = sql`parent_cat`;
+
+    const rawItems = await db
       .select({
         id: schema.categories.id,
         name: schema.categories.name,
@@ -34,12 +37,42 @@ export class CategoriesRepository {
         isActive: schema.categories.isActive,
         createdAt: schema.categories.createdAt,
         updatedAt: schema.categories.updatedAt,
+        parentName: sql<string | null>`${parentCategory}.name`,
+        productCount: sql<number>`count(distinct ${schema.productCategories.productId})::int`,
       })
       .from(schema.categories)
+      .leftJoin(
+        schema.productCategories,
+        eq(schema.productCategories.categoryId, schema.categories.id)
+      )
+      .leftJoin(
+        sql`categories as parent_cat`,
+        sql`${parentCategory}.id = ${schema.categories.parentId}`
+      )
       .where(where as any)
+      .groupBy(
+        schema.categories.id,
+        schema.categories.name,
+        schema.categories.slug,
+        schema.categories.description,
+        schema.categories.image,
+        schema.categories.parentId,
+        schema.categories.sortOrder,
+        schema.categories.isActive,
+        schema.categories.createdAt,
+        schema.categories.updatedAt,
+        sql`${parentCategory}.name`
+      )
       .orderBy(orderBy as any)
       .limit(limit)
       .offset(offset);
+
+    // Transform to include parent object for backward compatibility
+    const items = rawItems.map((item) => ({
+      ...item,
+      parent: item.parentId && item.parentName ? { id: item.parentId, name: item.parentName } : null,
+      productCount: Number(item.productCount || 0),
+    }));
 
     const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(schema.categories).where(where as any);
 

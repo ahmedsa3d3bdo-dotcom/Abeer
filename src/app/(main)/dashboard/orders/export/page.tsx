@@ -8,6 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import {
     Download,
     FileText,
@@ -22,6 +25,7 @@ import {
     CreditCard,
     Package,
     ArrowLeft,
+    Search,
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -103,7 +107,7 @@ const orderExports: Array<AdminExportConfig & { icon: any; iconBg: string }> = [
             const metrics = metricsData.data || {};
             const summary = [
                 { label: "Total Orders", value: metrics.totalOrders ?? items.length, format: "number" as const },
-                { label: "Total Revenue", value: Number(metrics.revenueTotal ?? 0), format: "currency" as const },
+                { label: "Total Sales", value: Number(metrics.revenueTotal ?? 0), format: "currency" as const },
                 { label: "Avg Order Value", value: Number(metrics.avgOrderValue ?? 0), format: "currency" as const },
                 { label: "Paid Orders", value: Number(metrics.paidOrders ?? 0), format: "number" as const },
             ];
@@ -187,7 +191,7 @@ const orderExports: Array<AdminExportConfig & { icon: any; iconBg: string }> = [
 
             const summary = [
                 { label: "Paid Orders", value: items.length, format: "number" as const },
-                { label: "Total Revenue", value: totalRevenue, format: "currency" as const },
+                { label: "Total Sales", value: totalRevenue, format: "currency" as const },
                 { label: "Avg Order Value", value: avgOrder, format: "currency" as const },
             ];
 
@@ -210,9 +214,14 @@ const orderExports: Array<AdminExportConfig & { icon: any; iconBg: string }> = [
         ],
         icon: Users,
         iconBg: "bg-violet-500/10",
-        fetchData: async () => {
+        fetchData: async (dateRange, customerId?: string) => {
             const params = new URLSearchParams();
             params.set("sort", "totalSpent.desc");
+            
+            // If a specific customer is selected, filter by that customer
+            if (customerId) {
+                params.set("id", customerId);
+            }
 
             const items = await fetchAllPages(
                 "/api/v1/customers",
@@ -234,10 +243,166 @@ const orderExports: Array<AdminExportConfig & { icon: any; iconBg: string }> = [
             const summary = [
                 { label: "Customers with Orders", value: totalCustomers, format: "number" as const },
                 { label: "Total Orders", value: totalOrders, format: "number" as const },
-                { label: "Total Revenue", value: totalRevenue, format: "currency" as const },
+                { label: "Total Sales", value: totalRevenue, format: "currency" as const },
             ];
 
             return { items: filteredItems, summary };
+        },
+    },
+    {
+        id: "customer-orders-detail",
+        name: "Customer Orders Detail",
+        type: "orders",
+        description: "Comprehensive order history with full details for a specific customer",
+        formats: ["pdf", "xlsx"],
+        fields: ["Order #", "Date", "Products", "Quantity", "Amount", "Status"],
+        columns: ADMIN_EXPORT_COLUMNS.orders.all,
+        icon: Users,
+        iconBg: "bg-purple-500/10",
+        requiresCustomer: true,
+        supportsOrderDetails: true,
+        landscape: true,
+        fetchData: async (dateRange, customerId?: string, includeDetails?: boolean) => {
+            if (!customerId) {
+                throw new Error("Please select a customer first");
+            }
+
+            // Fetch customer details
+            const customerRes = await fetch(`/api/v1/customers/${customerId}`);
+            const customerData = await customerRes.json();
+            const customer = customerData.data?.user;
+
+            if (!customer) {
+                throw new Error("Customer not found");
+            }
+
+            const params = new URLSearchParams();
+            params.set("userId", customerId);
+            params.set("sort", "createdAt.desc");
+            if (dateRange?.from) params.set("dateFrom", dateRange.from.toISOString().split("T")[0]);
+            if (dateRange?.to) params.set("dateTo", dateRange.to.toISOString().split("T")[0]);
+
+            // Fetch all orders for the customer
+            const ordersData = await fetchAllPages(
+                "/api/v1/orders",
+                params,
+                (o: any) => o
+            );
+
+            if (!includeDetails) {
+                // Simple order summary without item details
+                const items = ordersData.map((o: any) => ({
+                    orderNumber: o.orderNumber,
+                    orderDate: o.createdAt,
+                    itemsCount: o.itemsCount || 0,
+                    subtotal: Number(o.subtotalAmount || 0),
+                    shipping: Number(o.shippingAmount || 0),
+                    tax: Number(o.taxAmount || 0),
+                    discount: Number(o.discountAmount || 0),
+                    total: Number(o.totalAmount || 0),
+                    status: o.status,
+                    paymentStatus: o.paymentStatus,
+                }));
+
+                const totalOrders = items.length;
+                const totalSpent = items.reduce((acc, o) => acc + o.total, 0);
+                const avgOrderValue = totalOrders > 0 ? totalSpent / totalOrders : 0;
+
+                const summary = [
+                    { label: "Customer", value: `${customer.firstName || ""} ${customer.lastName || ""}`.trim() || customer.email, format: "text" as const },
+                    { label: "Email", value: customer.email, format: "text" as const },
+                    { label: "Total Orders", value: totalOrders, format: "number" as const },
+                    { label: "Total Spent", value: totalSpent, format: "currency" as const },
+                    { label: "Avg Order Value", value: avgOrderValue, format: "currency" as const },
+                ];
+
+                return { 
+                    items, 
+                    summary,
+                    columns: [
+                        { header: "Order #", key: "orderNumber", width: 16 },
+                        { header: "Date", key: "orderDate", format: "date" as const, width: 14 },
+                        { header: "Items", key: "itemsCount", format: "number" as const, align: "center" as const, width: 10 },
+                        { header: "Subtotal", key: "subtotal", format: "currency" as const, align: "right" as const, width: 12 },
+                        { header: "Shipping", key: "shipping", format: "currency" as const, align: "right" as const, width: 12 },
+                        { header: "Tax", key: "tax", format: "currency" as const, align: "right" as const, width: 10 },
+                        { header: "Discount", key: "discount", format: "currency" as const, align: "right" as const, width: 12 },
+                        { header: "Total", key: "total", format: "currency" as const, align: "right" as const, width: 12 },
+                        { header: "Status", key: "status", width: 12 },
+                        { header: "Payment", key: "paymentStatus", width: 12 },
+                    ]
+                };
+            }
+
+            // Detailed report with all order items - fetch full details for each order
+            const detailedItems: any[] = [];
+            let totalQuantity = 0;
+            let orderIndex = 0;
+
+            for (const order of ordersData) {
+                // Fetch full order details including items using the /details endpoint
+                const orderDetailRes = await fetch(`/api/v1/orders/${order.id}/details`);
+                const orderDetailData = await orderDetailRes.json();
+                const orderDetails = orderDetailData.data;
+
+                if (orderDetails?.items && orderDetails.items.length > 0) {
+                    let isFirstItemInOrder = true;
+                    
+                    for (const item of orderDetails.items) {
+                        const qty = Number(item.quantity || 0);
+                        totalQuantity += qty;
+                        
+                        detailedItems.push({
+                            // Only show order number for the first item in each order
+                            orderNumber: isFirstItemInOrder ? order.orderNumber : "",
+                            orderDate: isFirstItemInOrder ? order.createdAt : "",
+                            productName: item.productName || "Unknown Product",
+                            variantName: item.variantName || "Default",
+                            sku: item.sku || "—",
+                            quantity: qty,
+                            unitPrice: Number(item.unitPrice || 0),
+                            itemTotal: Number(item.totalPrice || 0),
+                            orderStatus: isFirstItemInOrder ? order.status : "",
+                            paymentStatus: isFirstItemInOrder ? order.paymentStatus : "",
+                            _orderIndex: orderIndex, // Hidden field for grouping
+                            _isFirstItem: isFirstItemInOrder,
+                        });
+                        
+                        isFirstItemInOrder = false;
+                    }
+                    orderIndex++;
+                }
+            }
+
+            const totalOrders = ordersData.length;
+            const totalSpent = ordersData.reduce((acc, o) => acc + Number(o.totalAmount || 0), 0);
+            const avgOrderValue = totalOrders > 0 ? totalSpent / totalOrders : 0;
+
+            const summary = [
+                { label: "Customer", value: `${customer.firstName || ""} ${customer.lastName || ""}`.trim() || customer.email, format: "text" as const },
+                { label: "Email", value: customer.email, format: "text" as const },
+                { label: "Total Orders", value: totalOrders, format: "number" as const },
+                { label: "Total Items", value: totalQuantity, format: "number" as const },
+                { label: "Total Spent", value: totalSpent, format: "currency" as const },
+                { label: "Avg Order Value", value: avgOrderValue, format: "currency" as const },
+            ];
+
+            return { 
+                items: detailedItems, 
+                summary,
+                columns: [
+                    { header: "Order #", key: "orderNumber", width: 18 },
+                    { header: "Date", key: "orderDate", format: "date" as const, width: 14 },
+                    { header: "Product", key: "productName", width: 30 },
+                    { header: "Variant", key: "variantName", width: 20 },
+                    { header: "SKU", key: "sku", width: 16 },
+                    { header: "Qty", key: "quantity", format: "number" as const, align: "center" as const, width: 8 },
+                    { header: "Unit Price", key: "unitPrice", format: "currency" as const, align: "right" as const, width: 14 },
+                    { header: "Item Total", key: "itemTotal", format: "currency" as const, align: "right" as const, width: 14 },
+                    { header: "Status", key: "orderStatus", width: 12 },
+                    { header: "Payment", key: "paymentStatus", width: 14 },
+                ]
+            };
         },
     },
 ];
@@ -254,6 +419,40 @@ export default function OrdersExportPage() {
         to: new Date(),
     });
     const [selectedFormats, setSelectedFormats] = useState<Record<string, ExportFormat>>({});
+    const [selectedCustomers, setSelectedCustomers] = useState<Record<string, string>>({});
+    const [customers, setCustomers] = useState<Array<{ id: string; name: string; email: string }>>([]);
+    const [loadingCustomers, setLoadingCustomers] = useState(false);
+    const [customerSearch, setCustomerSearch] = useState("");
+    const [includeOrderDetails, setIncludeOrderDetails] = useState<Record<string, boolean>>({});
+
+    // Fetch customers for selection
+    const fetchCustomers = async (search?: string) => {
+        setLoadingCustomers(true);
+        try {
+            const params = new URLSearchParams();
+            params.set("limit", "100");
+            params.set("sort", "totalSpent.desc");
+            if (search) {
+                params.set("q", search);
+            }
+            const res = await fetch(`/api/v1/customers?${params.toString()}`);
+            const data = await res.json();
+            const items = data.data?.items || [];
+            setCustomers(
+                items
+                    .filter((c: any) => c.ordersCount > 0)
+                    .map((c: any) => ({
+                        id: c.id,
+                        name: `${c.firstName || ""} ${c.lastName || ""}`.trim() || c.email,
+                        email: c.email,
+                    }))
+            );
+        } catch (error) {
+            console.error("Failed to fetch customers:", error);
+        } finally {
+            setLoadingCustomers(false);
+        }
+    };
 
     const { exportData, isExporting, progress, currentExport } = useAdminExport({
         onSuccess: (filename) => {
@@ -266,7 +465,15 @@ export default function OrdersExportPage() {
 
     const handleExport = async (config: (typeof orderExports)[0]) => {
         const format = selectedFormats[config.id] || config.formats[0];
-        await exportData(config, format, dateRange);
+        const customerId = selectedCustomers[config.id];
+        const includeDetails = includeOrderDetails[config.id] || false;
+        
+        if ((config as any).requiresCustomer && !customerId) {
+            toast.error("Please select a customer first");
+            return;
+        }
+        
+        await exportData(config, format, dateRange, customerId, includeDetails);
     };
 
     const getSelectedFormat = (exportId: string, defaultFormats: ExportFormat[]): ExportFormat => {
@@ -349,6 +556,86 @@ export default function OrdersExportPage() {
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2 sm:flex-col sm:items-end">
+                                            {/* Customer selector for reports that require it */}
+                                            {(config as any).requiresCustomer && (
+                                                <div className="flex flex-col gap-2">
+                                                    <Select
+                                                        value={selectedCustomers[config.id] || ""}
+                                                        onValueChange={(value) => {
+                                                            setSelectedCustomers((prev) => ({
+                                                                ...prev,
+                                                                [config.id]: value,
+                                                            }));
+                                                        }}
+                                                        disabled={isCurrentlyExporting}
+                                                        onOpenChange={(open) => {
+                                                            if (open && customers.length === 0) {
+                                                                fetchCustomers();
+                                                            }
+                                                        }}
+                                                    >
+                                                        <SelectTrigger className="w-[200px]">
+                                                            <SelectValue placeholder="Select customer..." />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <div className="flex items-center px-3 pb-2">
+                                                                <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                                                                <Input
+                                                                    placeholder="Search customers..."
+                                                                    value={customerSearch}
+                                                                    onChange={(e) => {
+                                                                        setCustomerSearch(e.target.value);
+                                                                        fetchCustomers(e.target.value);
+                                                                    }}
+                                                                    className="h-8"
+                                                                />
+                                                            </div>
+                                                            {loadingCustomers ? (
+                                                                <SelectItem value="loading" disabled>
+                                                                    Loading customers...
+                                                                </SelectItem>
+                                                            ) : customers.length === 0 ? (
+                                                                <SelectItem value="none" disabled>
+                                                                    No customers found
+                                                                </SelectItem>
+                                                            ) : (
+                                                                customers.map((customer) => (
+                                                                    <SelectItem key={customer.id} value={customer.id}>
+                                                                        <div className="flex flex-col">
+                                                                            <span>{customer.name}</span>
+                                                                            <span className="text-xs text-muted-foreground">{customer.email}</span>
+                                                                        </div>
+                                                                    </SelectItem>
+                                                                ))
+                                                            )}
+                                                        </SelectContent>
+                                                    </Select>
+                                                    
+                                                    {/* Checkbox for including order details */}
+                                                    {(config as any).supportsOrderDetails && (
+                                                        <div className="flex items-center space-x-2">
+                                                            <Checkbox
+                                                                id={`details-${config.id}`}
+                                                                checked={includeOrderDetails[config.id] || false}
+                                                                onCheckedChange={(checked) => {
+                                                                    setIncludeOrderDetails((prev) => ({
+                                                                        ...prev,
+                                                                        [config.id]: checked === true,
+                                                                    }));
+                                                                }}
+                                                                disabled={isCurrentlyExporting}
+                                                            />
+                                                            <Label
+                                                                htmlFor={`details-${config.id}`}
+                                                                className="text-sm font-normal cursor-pointer"
+                                                            >
+                                                                Include order items
+                                                            </Label>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                            
                                             {/* Format selector */}
                                             <Select
                                                 value={selectedFormat}
@@ -360,7 +647,7 @@ export default function OrdersExportPage() {
                                                 }
                                                 disabled={isCurrentlyExporting}
                                             >
-                                                <SelectTrigger className="w-24">
+                                                <SelectTrigger className="w-[100px]">
                                                     <SelectValue />
                                                 </SelectTrigger>
                                                 <SelectContent>

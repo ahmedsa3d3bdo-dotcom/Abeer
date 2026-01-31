@@ -21,11 +21,15 @@ export interface AdminExportConfig {
     description: string;
     formats: ExportFormat[];
     fields: string[];
-    fetchData: (dateRange?: { from: Date; to: Date }) => Promise<{
+    fetchData: (dateRange?: { from: Date; to: Date }, customerId?: string, includeDetails?: boolean) => Promise<{
         items: Record<string, any>[];
         summary?: SummaryItem[];
+        columns?: TableColumn[];
     }>;
     columns: TableColumn[];
+    landscape?: boolean; // Optional landscape orientation for PDF
+    requiresCustomer?: boolean; // Optional flag for exports that require customer selection
+    supportsOrderDetails?: boolean; // Optional flag for exports that support detailed order items
 }
 
 interface UseAdminExportOptions {
@@ -42,7 +46,9 @@ export function useAdminExport(options: UseAdminExportOptions = {}) {
         async (
             config: AdminExportConfig,
             format: ExportFormat,
-            dateRange?: { from: Date; to: Date }
+            dateRange?: { from: Date; to: Date },
+            customerId?: string,
+            includeDetails?: boolean
         ) => {
             setIsExporting(true);
             setProgress(10);
@@ -51,7 +57,7 @@ export function useAdminExport(options: UseAdminExportOptions = {}) {
             try {
                 // Fetch the data
                 setProgress(20);
-                const { items, summary = [] } = await config.fetchData(dateRange);
+                const { items, summary = [], columns } = await config.fetchData(dateRange, customerId, includeDetails);
 
                 setProgress(50);
 
@@ -64,10 +70,13 @@ export function useAdminExport(options: UseAdminExportOptions = {}) {
                     dateRange,
                 };
 
+                // Use dynamic columns if provided, otherwise use config columns
+                const tableColumns = columns || config.columns;
+
                 const tables = [
                     {
                         title: config.name,
-                        columns: config.columns,
+                        columns: tableColumns,
                         data: items,
                     },
                 ];
@@ -77,9 +86,10 @@ export function useAdminExport(options: UseAdminExportOptions = {}) {
                 // Generate the report in the selected format
                 let blob: Blob;
                 const filename = getReportFilename(config.name.replace(/\s+/g, "-"), format);
+                const orientation = config.landscape ? "landscape" : "portrait";
 
                 if (format === "pdf") {
-                    blob = await generatePDFReport(metadata, summary, tables);
+                    blob = await generatePDFReport(metadata, summary, tables, undefined, orientation);
                 } else if (format === "xlsx") {
                     blob = generateExcelReport(
                         metadata,
@@ -91,7 +101,7 @@ export function useAdminExport(options: UseAdminExportOptions = {}) {
                         }))
                     );
                 } else {
-                    blob = generateCSVReport(config.columns, items);
+                    blob = generateCSVReport(tableColumns, items);
                 }
 
                 setProgress(90);
@@ -184,9 +194,9 @@ export const ADMIN_EXPORT_COLUMNS = {
     },
     discounts: {
         all: [
-            { header: "Code", key: "code", width: 20 },
+            { header: "Name / Code", key: "nameCode", width: 30 },
             { header: "Type", key: "type", width: 15 },
-            { header: "Value", key: "discountValue", width: 12 },
+            { header: "Value", key: "discountValue", width: 18 },
             { header: "Uses", key: "usageCount", format: "number" as const, align: "center" as const, width: 10 },
             { header: "Max Uses", key: "usageLimit", width: 12 },
             { header: "Status", key: "status", width: 12 },

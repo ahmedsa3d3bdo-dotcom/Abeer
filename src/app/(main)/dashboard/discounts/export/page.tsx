@@ -76,15 +76,60 @@ const discountExports: Array<AdminExportConfig & { icon: any; iconBg: string }> 
             const items = await fetchAllPages(
                 "/api/v1/discounts",
                 params,
-                (d: any) => ({
-                    code: d.code,
-                    type: d.type,
-                    discountValue: d.type === "percentage" ? `${d.value}%` : d.value,
-                    usageCount: d.usageCount ?? 0,
-                    usageLimit: d.maxUses ?? "Unlimited",
-                    status: d.isActive ? "Active" : "Inactive",
-                    endDate: d.endDate,
-                })
+                (d: any) => {
+                    const now = new Date();
+                    const endDate = d.endDate ? new Date(d.endDate) : null;
+                    const startDate = d.startDate ? new Date(d.startDate) : null;
+                    const isExpired = endDate && endDate < now;
+                    const isNotStarted = startDate && startDate > now;
+                    const isMaxedOut = d.maxUses && d.usageCount >= d.maxUses;
+                    
+                    // Determine status based on actual conditions
+                    let status = "Inactive";
+                    if (d.isActive) {
+                        if (isExpired) {
+                            status = "Expired";
+                        } else if (isMaxedOut) {
+                            status = "Max Uses Reached";
+                        } else if (isNotStarted) {
+                            status = "Scheduled";
+                        } else {
+                            status = "Active";
+                        }
+                    }
+                    
+                    // Format value based on type
+                    let discountValue = "";
+                    if (d.type === "percentage") {
+                        discountValue = `${d.value}%`;
+                    } else if (d.type === "fixed_amount") {
+                        discountValue = `$${d.value}`;
+                    } else if (d.type === "bxgy") {
+                        // Parse BXGY metadata to show proper value
+                        const metadata = d.metadata || {};
+                        const buyQty = metadata.buyQuantity || metadata.buy_quantity || 1;
+                        const getQty = metadata.getQuantity || metadata.get_quantity || 1;
+                        discountValue = `Buy ${buyQty} Get ${getQty}`;
+                    } else {
+                        discountValue = d.value || "—";
+                    }
+                    
+                    // Combine name and code
+                    let nameCode = d.name || "—";
+                    if (d.code) {
+                        nameCode = `${d.name || "Discount"} (${d.code})`;
+                    }
+                    
+                    return {
+                        nameCode: nameCode,
+                        type: d.type,
+                        discountValue: discountValue,
+                        usageCount: d.usageCount ?? 0,
+                        usageLimit: d.maxUses ?? "Unlimited",
+                        status: status,
+                        endDate: d.endDate || null,
+                    };
+                }
             );
 
             const metrics = metricsData.data || {};
@@ -115,16 +160,45 @@ const discountExports: Array<AdminExportConfig & { icon: any; iconBg: string }> 
             const items = await fetchAllPages(
                 "/api/v1/discounts",
                 params,
-                (d: any) => ({
-                    code: d.code,
-                    type: d.type,
-                    discountValue: d.type === "percentage" ? `${d.value}%` : d.value,
-                    usageCount: d.usageCount ?? 0,
-                    usageLimit: d.maxUses ?? "Unlimited",
-                    status: "Active",
-                    endDate: d.endDate,
-                })
-            );
+                (d: any) => {
+                    const now = new Date();
+                    const endDate = d.endDate ? new Date(d.endDate) : null;
+                    const startDate = d.startDate ? new Date(d.startDate) : null;
+                    const isExpired = endDate && endDate < now;
+                    const isNotStarted = startDate && startDate > now;
+                    
+                    // Format value based on type
+                    let discountValue = "";
+                    if (d.type === "percentage") {
+                        discountValue = `${d.value}%`;
+                    } else if (d.type === "fixed_amount") {
+                        discountValue = `$${d.value}`;
+                    } else if (d.type === "bxgy") {
+                        const metadata = d.metadata || {};
+                        const buyQty = metadata.buyQuantity || metadata.buy_quantity || 1;
+                        const getQty = metadata.getQuantity || metadata.get_quantity || 1;
+                        discountValue = `Buy ${buyQty} Get ${getQty}`;
+                    } else {
+                        discountValue = d.value || "—";
+                    }
+                    
+                    // Combine name and code
+                    let nameCode = d.name || "—";
+                    if (d.code) {
+                        nameCode = `${d.name || "Discount"} (${d.code})`;
+                    }
+                    
+                    return {
+                        nameCode: nameCode,
+                        type: d.type,
+                        discountValue: discountValue,
+                        usageCount: d.usageCount ?? 0,
+                        usageLimit: d.maxUses ?? "Unlimited",
+                        status: isExpired ? "Expired" : (isNotStarted ? "Scheduled" : "Active"),
+                        endDate: d.endDate || null,
+                    };
+                }
+            ).then(items => items.filter(d => d.status === "Active")); // Filter out expired/scheduled ones
 
             const summary = [
                 { label: "Active Discounts", value: items.length, format: "number" as const },
@@ -139,11 +213,11 @@ const discountExports: Array<AdminExportConfig & { icon: any; iconBg: string }> 
         type: "discounts",
         description: "Discounts that have expired or reached their usage limit",
         formats: ["pdf", "xlsx"],
-        fields: ["Code", "Type", "Value", "Uses", "Expired"],
+        fields: ["Name / Code", "Type", "Value", "Uses", "Expired"],
         columns: [
-            { header: "Code", key: "code", width: 22 },
+            { header: "Name / Code", key: "nameCode", width: 30 },
             { header: "Type", key: "type", width: 15 },
-            { header: "Value", key: "discountValue", width: 12 },
+            { header: "Value", key: "discountValue", width: 18 },
             { header: "Total Uses", key: "usageCount", format: "number" as const, align: "center" as const, width: 12 },
             { header: "Expired", key: "endDate", format: "date" as const, width: 14 },
         ],
@@ -156,15 +230,38 @@ const discountExports: Array<AdminExportConfig & { icon: any; iconBg: string }> 
             const allItems = await fetchAllPages(
                 "/api/v1/discounts",
                 params,
-                (d: any) => ({
-                    code: d.code,
-                    type: d.type,
-                    discountValue: d.type === "percentage" ? `${d.value}%` : d.value,
-                    usageCount: d.usageCount ?? 0,
-                    endDate: d.endDate,
-                    isExpired: d.endDate ? new Date(d.endDate) < new Date() : false,
-                    reachedLimit: d.maxUses ? d.usageCount >= d.maxUses : false,
-                })
+                (d: any) => {
+                    // Format value based on type
+                    let discountValue = "";
+                    if (d.type === "percentage") {
+                        discountValue = `${d.value}%`;
+                    } else if (d.type === "fixed_amount") {
+                        discountValue = `$${d.value}`;
+                    } else if (d.type === "bxgy") {
+                        const metadata = d.metadata || {};
+                        const buyQty = metadata.buyQuantity || metadata.buy_quantity || 1;
+                        const getQty = metadata.getQuantity || metadata.get_quantity || 1;
+                        discountValue = `Buy ${buyQty} Get ${getQty}`;
+                    } else {
+                        discountValue = d.value || "—";
+                    }
+                    
+                    // Combine name and code
+                    let nameCode = d.name || "—";
+                    if (d.code) {
+                        nameCode = `${d.name || "Discount"} (${d.code})`;
+                    }
+                    
+                    return {
+                        nameCode: nameCode,
+                        type: d.type,
+                        discountValue: discountValue,
+                        usageCount: d.usageCount ?? 0,
+                        endDate: d.endDate || null,
+                        isExpired: d.endDate ? new Date(d.endDate) < new Date() : false,
+                        reachedLimit: d.maxUses ? d.usageCount >= d.maxUses : false,
+                    };
+                }
             );
 
             // Filter to expired only
@@ -318,7 +415,7 @@ export default function DiscountsExportPage() {
                                                 }
                                                 disabled={isCurrentlyExporting}
                                             >
-                                                <SelectTrigger className="w-24">
+                                                <SelectTrigger className="w-[100px]">
                                                     <SelectValue />
                                                 </SelectTrigger>
                                                 <SelectContent>

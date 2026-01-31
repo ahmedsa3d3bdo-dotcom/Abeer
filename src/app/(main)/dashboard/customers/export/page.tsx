@@ -90,7 +90,7 @@ const customerExports: Array<AdminExportConfig & { icon: any; iconBg: string }> 
             const summary = [
                 { label: "Total Customers", value: metrics.totalCustomers ?? items.length, format: "number" as const },
                 { label: "Active Customers", value: metrics.activeCustomers ?? 0, format: "number" as const },
-                { label: "Total Revenue", value: Number(metrics.totalSpent ?? 0), format: "currency" as const },
+                { label: "Total Sales", value: Number(metrics.totalSpent ?? 0), format: "currency" as const },
                 { label: "Avg Order Value", value: Number(metrics.avgOrderValue ?? 0), format: "currency" as const },
             ];
 
@@ -215,7 +215,7 @@ const customerExports: Array<AdminExportConfig & { icon: any; iconBg: string }> 
             const summary = [
                 { label: "Active Customers", value: items.length, format: "number" as const },
                 { label: "Total Orders", value: totalOrders, format: "number" as const },
-                { label: "Total Revenue", value: totalSpent, format: "currency" as const },
+                { label: "Total Sales", value: totalSpent, format: "currency" as const },
             ];
 
             return { items, summary };
@@ -315,7 +315,7 @@ export default function CustomersExportPage() {
                                                 }
                                                 disabled={isCurrentlyExporting}
                                             >
-                                                <SelectTrigger className="w-24">
+                                                <SelectTrigger className="w-[100px]">
                                                     <SelectValue />
                                                 </SelectTrigger>
                                                 <SelectContent>

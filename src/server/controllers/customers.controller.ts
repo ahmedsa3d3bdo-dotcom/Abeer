@@ -5,7 +5,7 @@ import { handleRouteError, successResponse } from "../utils/response";
 import { validateQuery, validateBody } from "../utils/validation";
 import { db } from "@/shared/db";
 import * as schema from "@/shared/db/schema";
-import { sql } from "drizzle-orm";
+import { sql, inArray } from "drizzle-orm";
 import { settingsRepository } from "@/server/repositories/settings.repository";
 import { requirePermission } from "../utils/rbac";
 import { writeAudit } from "../utils/audit";
@@ -23,7 +23,7 @@ const listQuerySchema = z.object({
   isActive: z.coerce.boolean().optional(),
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
-  sort: z.enum(["createdAt.desc", "createdAt.asc"]).optional(),
+  sort: z.enum(["createdAt.desc", "createdAt.asc", "totalSpent.desc", "totalSpent.asc"]).optional(),
 });
 
 const upsertSchema = z.object({
@@ -39,7 +39,17 @@ export class CustomersController {
     try {
       await requirePermission(request, "customers.view");
       const query = validateQuery(request.nextUrl.searchParams, listQuerySchema);
-      const result = await userService.list({ ...query, role: "user" });
+      
+      // Extract totalSpent sort for post-processing, don't pass to userService
+      const isTotalSpentSort = query.sort?.startsWith("totalSpent");
+      const userServiceQuery: Parameters<typeof userService.list>[0] = {
+        ...query,
+        role: "user",
+        // Only pass createdAt sorts to userService, handle totalSpent sorts after aggregation
+        sort: isTotalSpentSort ? undefined : query.sort as "createdAt.desc" | "createdAt.asc" | undefined,
+      };
+      
+      const result = await userService.list(userServiceQuery);
       if (!result.success) return NextResponse.json({ success: false, error: result.error }, { status: 400 });
       const items = result.data.items || [];
       const userIds = items.map((u: any) => u.id).filter(Boolean);
@@ -54,7 +64,7 @@ export class CustomersController {
             lastOrderAt: sql<Date>`MAX(${schema.orders.createdAt})`,
           })
           .from(schema.orders)
-          .where(sql`${schema.orders.userId} IN ${userIds}`)
+          .where(inArray(schema.orders.userId, userIds))
           .groupBy(schema.orders.userId as any);
         for (const r of rows as any[]) {
           aggMap.set(r.userId, {
@@ -65,10 +75,18 @@ export class CustomersController {
           });
         }
       }
-      const enriched = items.map((u: any) => {
+      let enriched = items.map((u: any) => {
         const agg = aggMap.get(u.id) || { ordersCount: 0, totalSpent: 0, avgOrderValue: 0, lastOrderAt: null };
         return { ...u, ...agg };
       });
+      
+      // Apply sorting by totalSpent if requested
+      if (query.sort === "totalSpent.desc") {
+        enriched = enriched.sort((a, b) => b.totalSpent - a.totalSpent);
+      } else if (query.sort === "totalSpent.asc") {
+        enriched = enriched.sort((a, b) => a.totalSpent - b.totalSpent);
+      }
+      
       const currencySetting = await settingsRepository.findByKey("currency");
       const currency = currencySetting?.value || "CAD";
       return successResponse({ items: enriched, total: result.data.total, currency });
@@ -243,7 +261,7 @@ export class CustomersController {
       if (query.dateFrom) filters.push(sql`${schema.users.createdAt} >= ${new Date(query.dateFrom)}`);
       if (query.dateTo) filters.push(sql`${schema.users.createdAt} <= ${new Date(query.dateTo)}`);
       // Restrict to role customers
-      filters.push(sql`${schema.users.id} IN ${roleUserIds}`);
+      filters.push(inArray(schema.users.id, roleUserIds));
       const whereUsers = filters.length ? sql.join(filters, sql` AND `) : undefined;
 
       const [{ total: totalCustomers }] = await db
@@ -279,7 +297,7 @@ export class CustomersController {
             last30dOrdersCount: sql<number>`COUNT(*) FILTER (WHERE ${schema.orders.createdAt} >= ${thirtyDaysAgo})`,
           })
           .from(schema.orders)
-          .where(sql`${schema.orders.userId} IN ${userIds}`);
+          .where(inArray(schema.orders.userId, userIds));
         ordersCount = Number((o as any)?.ordersCount || 0);
         totalSpent = Number((o as any)?.totalSpent || 0);
         avgOrderValue = Number((o as any)?.avgOrderValue || 0);
@@ -288,7 +306,7 @@ export class CustomersController {
         const [ret] = await db
           .select({ count: sql<number>`COUNT(DISTINCT ${schema.orders.userId})` })
           .from(schema.orders)
-          .where(sql`${schema.orders.userId} IN ${userIds}`);
+          .where(inArray(schema.orders.userId, userIds));
         returningCustomers = Number((ret as any)?.count || 0);
       }
 

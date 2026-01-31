@@ -78,11 +78,13 @@ const reviewExports: Array<AdminExportConfig & { icon: any; iconBg: string }> = 
                 "/api/v1/reviews",
                 params,
                 (r: any) => ({
-                    productName: r.productName || r.product?.name || "—",
-                    customerName: r.userName || r.user?.name || r.user?.email || "—",
+                    productName: r.productName || "—",
+                    customerName: r.userFirstName && r.userLastName 
+                        ? `${r.userFirstName} ${r.userLastName}`.trim()
+                        : r.userEmail || "Guest",
                     rating: r.rating,
                     title: r.title || "—",
-                    status: r.status || (r.isApproved ? "Approved" : "Pending"),
+                    status: r.isApproved ? "Approved" : "Pending",
                     createdAt: r.createdAt,
                 })
             );
@@ -121,8 +123,10 @@ const reviewExports: Array<AdminExportConfig & { icon: any; iconBg: string }> = 
                 "/api/v1/reviews",
                 params,
                 (r: any) => ({
-                    productName: r.productName || r.product?.name || "—",
-                    customerName: r.userName || r.user?.name || r.user?.email || "—",
+                    productName: r.productName || "—",
+                    customerName: r.userFirstName && r.userLastName 
+                        ? `${r.userFirstName} ${r.userLastName}`.trim()
+                        : r.userEmail || "Guest",
                     rating: r.rating,
                     title: r.title || "—",
                     status: "Approved",
@@ -161,8 +165,10 @@ const reviewExports: Array<AdminExportConfig & { icon: any; iconBg: string }> = 
                 "/api/v1/reviews",
                 params,
                 (r: any) => ({
-                    productName: r.productName || r.product?.name || "—",
-                    customerName: r.userName || r.user?.name || r.user?.email || "—",
+                    productName: r.productName || "—",
+                    customerName: r.userFirstName && r.userLastName 
+                        ? `${r.userFirstName} ${r.userLastName}`.trim()
+                        : r.userEmail || "Guest",
                     rating: r.rating,
                     title: r.title || "—",
                     status: "Pending",
@@ -195,11 +201,13 @@ const reviewExports: Array<AdminExportConfig & { icon: any; iconBg: string }> = 
                 "/api/v1/reviews",
                 params,
                 (r: any) => ({
-                    productName: r.productName || r.product?.name || "—",
-                    customerName: r.userName || r.user?.name || r.user?.email || "—",
+                    productName: r.productName || "—",
+                    customerName: r.userFirstName && r.userLastName 
+                        ? `${r.userFirstName} ${r.userLastName}`.trim()
+                        : r.userEmail || "Guest",
                     rating: r.rating,
                     title: r.title || "—",
-                    status: r.status || (r.isApproved ? "Approved" : "Pending"),
+                    status: r.isApproved ? "Approved" : "Pending",
                     createdAt: r.createdAt,
                 })
             );
@@ -232,11 +240,13 @@ const reviewExports: Array<AdminExportConfig & { icon: any; iconBg: string }> = 
                 "/api/v1/reviews",
                 params,
                 (r: any) => ({
-                    productName: r.productName || r.product?.name || "—",
-                    customerName: r.userName || r.user?.name || r.user?.email || "—",
+                    productName: r.productName || "—",
+                    customerName: r.userFirstName && r.userLastName 
+                        ? `${r.userFirstName} ${r.userLastName}`.trim()
+                        : r.userEmail || "Guest",
                     rating: r.rating,
                     title: r.title || "—",
-                    status: r.status || (r.isApproved ? "Approved" : "Pending"),
+                    status: r.isApproved ? "Approved" : "Pending",
                     createdAt: r.createdAt,
                 })
             );
@@ -345,7 +355,7 @@ export default function ReviewsExportPage() {
                                                 }
                                                 disabled={isCurrentlyExporting}
                                             >
-                                                <SelectTrigger className="w-24">
+                                                <SelectTrigger className="w-[100px]">
                                                     <SelectValue />
                                                 </SelectTrigger>
                                                 <SelectContent>
