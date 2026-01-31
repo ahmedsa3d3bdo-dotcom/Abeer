@@ -55,6 +55,9 @@ interface ProductsData {
         sku: string;
         revenue: number;
         units: number;
+        cost: number;
+        profit: number;
+        profitMargin: number;
         views: number;
         conversionRate: number;
     }>;
@@ -64,6 +67,9 @@ interface ProductsData {
         sku: string;
         revenue: number;
         units: number;
+        cost: number;
+        profit: number;
+        profitMargin: number;
     }>;
     categoryPerformance: Array<{
         id: string;
@@ -71,6 +77,9 @@ interface ProductsData {
         revenue: number;
         units: number;
         products: number;
+        cost: number;
+        profit: number;
+        profitMargin: number;
     }>;
     lowStockItems: Array<{
         id: string;
@@ -134,11 +143,14 @@ export default function ProductsAnalyticsPage() {
                     {
                         title: "Top Selling Products",
                         columns: [
-                            { header: "Rank", key: "rank", width: 10, align: "center" },
-                            { header: "Product", key: "name", width: 30 },
-                            { header: "SKU", key: "sku", width: 15 },
-                            { header: "Units", key: "units", format: "number", align: "right", width: 12 },
-                            { header: "Revenue", key: "revenue", format: "currency", align: "right", width: 18 },
+                            { header: "Rank", key: "rank", width: 8, align: "center" },
+                            { header: "Product", key: "name", width: 22 },
+                            { header: "SKU", key: "sku", width: 12 },
+                            { header: "Units", key: "units", format: "number", align: "right", width: 10 },
+                            { header: "Revenue", key: "revenue", format: "currency", align: "right", width: 14 },
+                            { header: "Cost", key: "cost", format: "currency", align: "right", width: 12 },
+                            { header: "Profit", key: "profit", format: "currency", align: "right", width: 14 },
+                            { header: "Margin %", key: "profitMargin", format: "percentage", align: "right", width: 10 },
                         ],
                         data: data.topProducts.map((p, i) => ({
                             rank: i + 1,
@@ -146,15 +158,21 @@ export default function ProductsAnalyticsPage() {
                             sku: p.sku,
                             units: p.units,
                             revenue: p.revenue,
+                            cost: p.cost,
+                            profit: p.profit,
+                            profitMargin: p.profitMargin,
                         })),
                     },
                     {
                         title: "Category Performance",
                         columns: [
-                            { header: "Category", key: "name", width: 30 },
-                            { header: "Products", key: "products", format: "number", align: "center", width: 15 },
-                            { header: "Units Sold", key: "units", format: "number", align: "right", width: 15 },
-                            { header: "Revenue", key: "revenue", format: "currency", align: "right", width: 20 },
+                            { header: "Category", key: "name", width: 25 },
+                            { header: "Products", key: "products", format: "number", align: "center", width: 12 },
+                            { header: "Units Sold", key: "units", format: "number", align: "right", width: 12 },
+                            { header: "Revenue", key: "revenue", format: "currency", align: "right", width: 15 },
+                            { header: "Cost", key: "cost", format: "currency", align: "right", width: 15 },
+                            { header: "Profit", key: "profit", format: "currency", align: "right", width: 15 },
+                            { header: "Margin %", key: "profitMargin", format: "percentage", align: "right", width: 10 },
                         ],
                         data: data.categoryPerformance,
                     },
@@ -323,13 +341,12 @@ export default function ProductsAnalyticsPage() {
                                 <TableHead>Product</TableHead>
                                 <TableHead className="text-right">Units</TableHead>
                                 <TableHead className="text-right">Revenue</TableHead>
-                                <TableHead className="text-right">Share</TableHead>
+                                <TableHead className="text-right">Profit</TableHead>
+                                <TableHead className="text-right">Margin</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {data.topProducts.map((product, index) => {
-                                const totalRevenue = data.topProducts.reduce((s, p) => s + p.revenue, 0);
-                                const share = totalRevenue > 0 ? (product.revenue / totalRevenue) * 100 : 0;
                                 return (
                                     <TableRow key={`product-row-${product.id}-${index}`}>
                                         <TableCell>
@@ -347,13 +364,13 @@ export default function ProductsAnalyticsPage() {
                                         <TableCell className="text-right font-medium text-emerald-600">
                                             {fmt(product.revenue)}
                                         </TableCell>
+                                        <TableCell className="text-right font-medium text-blue-600">
+                                            {fmt(product.profit)}
+                                        </TableCell>
                                         <TableCell className="text-right">
-                                            <div className="flex items-center justify-end gap-2">
-                                                <Progress value={share} className="w-16 h-2" />
-                                                <span className="text-xs text-muted-foreground w-10">
-                                                    {share.toFixed(1)}%
-                                                </span>
-                                            </div>
+                                            <Badge variant={product.profitMargin > 30 ? "default" : product.profitMargin > 15 ? "secondary" : "destructive"}>
+                                                {product.profitMargin.toFixed(1)}%
+                                            </Badge>
                                         </TableCell>
                                     </TableRow>
                                 );
@@ -369,7 +386,7 @@ export default function ProductsAnalyticsPage() {
                 <Card>
                     <CardHeader>
                         <CardTitle>Underperforming Products</CardTitle>
-                        <CardDescription>Products with lowest sales</CardDescription>
+                        <CardDescription>Products with lowest profit margins</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-3">
@@ -381,7 +398,9 @@ export default function ProductsAnalyticsPage() {
                                     </div>
                                     <div className="text-right">
                                         <p className="text-sm font-medium">{product.units} units</p>
-                                        <p className="text-xs text-muted-foreground">{fmt(product.revenue)}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                            {fmt(product.profit)} • {product.profitMargin.toFixed(1)}% margin
+                                        </p>
                                     </div>
                                 </div>
                             ))}
@@ -574,7 +593,7 @@ export default function ProductsAnalyticsPage() {
                 <Card>
                     <CardHeader>
                         <CardTitle>Category Performance</CardTitle>
-                        <CardDescription>Detailed category breakdown</CardDescription>
+                        <CardDescription>Detailed category breakdown with profit margins</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <Table>
@@ -584,6 +603,8 @@ export default function ProductsAnalyticsPage() {
                                     <TableHead className="text-right">Products</TableHead>
                                     <TableHead className="text-right">Units</TableHead>
                                     <TableHead className="text-right">Revenue</TableHead>
+                                    <TableHead className="text-right">Profit</TableHead>
+                                    <TableHead className="text-right">Margin</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -600,7 +621,17 @@ export default function ProductsAnalyticsPage() {
                                         </TableCell>
                                         <TableCell className="text-right">{cat.products}</TableCell>
                                         <TableCell className="text-right">{cat.units.toLocaleString()}</TableCell>
-                                        <TableCell className="text-right font-medium">{fmt(cat.revenue)}</TableCell>
+                                        <TableCell className="text-right font-medium text-emerald-600">
+                                            {fmt(cat.revenue)}
+                                        </TableCell>
+                                        <TableCell className="text-right font-medium text-blue-600">
+                                            {fmt(cat.profit)}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <Badge variant={cat.profitMargin > 30 ? "default" : cat.profitMargin > 15 ? "secondary" : "destructive"}>
+                                                {cat.profitMargin.toFixed(1)}%
+                                            </Badge>
+                                        </TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>

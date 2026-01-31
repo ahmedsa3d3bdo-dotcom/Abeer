@@ -33,6 +33,8 @@ interface SalesData {
         totalRevenue: number;
         totalOrders: number;
         averageOrderValue: number;
+        totalProfit: number;
+        profitMargin: number;
         conversionRate: number;
         previousRevenue: number;
         previousOrders: number;
@@ -40,7 +42,15 @@ interface SalesData {
     revenueByDay: Array<{ date: string; revenue: number; orders: number; profit: number }>;
     ordersByStatus: Array<{ status: string; count: number; percentage: number }>;
     revenueByPayment: Array<{ method: string; amount: number; count: number }>;
-    topProducts: Array<{ id: string; name: string; revenue: number; units: number }>;
+    topProducts: Array<{ 
+        id: string; 
+        name: string; 
+        revenue: number; 
+        units: number;
+        cost: number;
+        profit: number;
+        profitMargin: number;
+    }>;
     salesByHour: Array<{ hour: number; orders: number; revenue: number }>;
 }
 
@@ -90,9 +100,11 @@ export default function SalesAnalyticsPage() {
                 fetchData: async () => ({
                     summary: [
                         { label: "Total Revenue", value: data.summary.totalRevenue, format: "currency", color: "emerald" },
-                        { label: "Total Orders", value: data.summary.totalOrders, format: "number", color: "blue" },
-                        { label: "Average Order Value", value: data.summary.averageOrderValue, format: "currency", color: "purple" },
-                        { label: "Conversion Rate", value: data.summary.conversionRate, format: "percentage", color: "amber" },
+                        { label: "Total Profit", value: data.summary.totalProfit, format: "currency", color: "blue" },
+                        { label: "Profit Margin", value: data.summary.profitMargin, format: "percentage", color: "purple" },
+                        { label: "Total Orders", value: data.summary.totalOrders, format: "number", color: "amber" },
+                        { label: "Average Order Value", value: data.summary.averageOrderValue, format: "currency", color: "indigo" },
+                        { label: "Conversion Rate", value: data.summary.conversionRate, format: "percentage", color: "pink" },
                     ],
                     charts: [],
                 tables: [
@@ -115,15 +127,21 @@ export default function SalesAnalyticsPage() {
                         title: "Top Selling Products",
                         columns: [
                             { header: "Rank", key: "rank", width: 10, align: "center" },
-                            { header: "Product", key: "name", width: 35 },
-                            { header: "Units", key: "units", format: "number", align: "right", width: 15 },
-                            { header: "Revenue", key: "revenue", format: "currency", align: "right", width: 20 },
+                            { header: "Product", key: "name", width: 25 },
+                            { header: "Units", key: "units", format: "number", align: "right", width: 12 },
+                            { header: "Revenue", key: "revenue", format: "currency", align: "right", width: 15 },
+                            { header: "Cost", key: "cost", format: "currency", align: "right", width: 15 },
+                            { header: "Profit", key: "profit", format: "currency", align: "right", width: 15 },
+                            { header: "Margin %", key: "profitMargin", format: "percentage", align: "right", width: 12 },
                         ],
                         data: data.topProducts.map((p, i) => ({
                             rank: i + 1,
                             name: p.name,
                             units: p.units,
                             revenue: p.revenue,
+                            cost: p.cost,
+                            profit: p.profit,
+                            profitMargin: p.profitMargin,
                         })),
                     },
                     {
@@ -232,7 +250,7 @@ export default function SalesAnalyticsPage() {
             </div>
 
             {/* KPI Cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
                 <KPICard
                     title="Total Revenue"
                     value={fmt(data.summary.totalRevenue)}
@@ -241,23 +259,29 @@ export default function SalesAnalyticsPage() {
                     color="emerald"
                 />
                 <KPICard
+                    title="Total Profit"
+                    value={fmt(data.summary.totalProfit)}
+                    icon={TrendingUp}
+                    color="blue"
+                />
+                <KPICard
+                    title="Profit Margin"
+                    value={`${data.summary.profitMargin.toFixed(1)}%`}
+                    icon={Percent}
+                    color="purple"
+                />
+                <KPICard
                     title="Total Orders"
                     value={data.summary.totalOrders.toLocaleString()}
                     change={ordersChange}
                     icon={ShoppingCart}
-                    color="blue"
+                    color="amber"
                 />
                 <KPICard
-                    title="Average Order Value"
+                    title="Avg Order Value"
                     value={fmt(data.summary.averageOrderValue)}
                     icon={CreditCard}
-                    color="purple"
-                />
-                <KPICard
-                    title="Conversion Rate"
-                    value={`${data.summary.conversionRate.toFixed(1)}%`}
-                    icon={Percent}
-                    color="amber"
+                    color="indigo"
                 />
             </div>
 
@@ -427,7 +451,7 @@ export default function SalesAnalyticsPage() {
                 <Card>
                     <CardHeader>
                         <CardTitle>Top Selling Products</CardTitle>
-                        <CardDescription>Products by revenue contribution</CardDescription>
+                        <CardDescription>Products by revenue and profit margin</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-4">
@@ -438,10 +462,13 @@ export default function SalesAnalyticsPage() {
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <p className="font-medium truncate">{product.name}</p>
-                                        <p className="text-xs text-muted-foreground">{product.units} units sold</p>
+                                        <p className="text-xs text-muted-foreground">
+                                            {product.units} units • {product.profitMargin.toFixed(1)}% margin
+                                        </p>
                                     </div>
                                     <div className="text-right">
                                         <p className="font-medium text-emerald-600">{fmt(product.revenue)}</p>
+                                        <p className="text-xs text-blue-600">{fmt(product.profit)} profit</p>
                                     </div>
                                 </div>
                             ))}
@@ -558,13 +585,14 @@ function KPICard({
     value: string;
     change?: number;
     icon: React.ElementType;
-    color: "emerald" | "blue" | "purple" | "amber";
+    color: "emerald" | "blue" | "purple" | "amber" | "indigo";
 }) {
     const colorClasses = {
         emerald: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
         blue: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
         purple: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
         amber: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+        indigo: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400",
     };
 
     return (

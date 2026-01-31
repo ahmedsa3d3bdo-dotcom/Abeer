@@ -22,15 +22,16 @@ import { cn } from "@/lib/utils";
 import { useReportGenerator, type ReportFormat, type ReportConfig } from "@/hooks/use-report-generator";
 import { toast } from "sonner";
 
-const productReports: Array<ReportConfig & { description: string; formats: string[]; fields: string[]; icon: any }> = [
+const productReports: Array<ReportConfig & { description: string; formats: string[]; fields: string[]; icon: any; color: string }> = [
     {
         id: "product-catalog",
         name: "Product Catalog Export",
         type: "products",
         description: "Complete product listing with all details",
         formats: ["XLSX", "CSV"],
-        fields: ["Name", "SKU", "Price", "Stock", "Status", "Category"],
+        fields: ["Name", "SKU", "Price", "Cost", "Stock", "Status", "Category"],
         icon: Package,
+        color: "blue",
     },
     {
         id: "inventory-levels",
@@ -38,8 +39,9 @@ const productReports: Array<ReportConfig & { description: string; formats: strin
         type: "products",
         description: "Current stock quantities across all products",
         formats: ["PDF", "XLSX"],
-        fields: ["Product", "SKU", "Stock", "Reserved", "Available", "Location"],
+        fields: ["Product", "SKU", "Stock", "Reserved", "Available", "Value"],
         icon: Boxes,
+        color: "purple",
     },
     {
         id: "low-stock-alert",
@@ -47,8 +49,9 @@ const productReports: Array<ReportConfig & { description: string; formats: strin
         type: "products",
         description: "Products below their reorder threshold",
         formats: ["PDF", "XLSX", "CSV"],
-        fields: ["Product", "SKU", "Current Stock", "Threshold", "Vendor"],
+        fields: ["Product", "SKU", "Current Stock", "Threshold", "Reorder Qty"],
         icon: AlertTriangle,
+        color: "amber",
     },
     {
         id: "product-performance",
@@ -56,8 +59,9 @@ const productReports: Array<ReportConfig & { description: string; formats: strin
         type: "products",
         description: "Sales performance metrics by product",
         formats: ["PDF", "XLSX"],
-        fields: ["Product", "Units Sold", "Revenue", "Views", "Conversion Rate"],
+        fields: ["Product", "Units Sold", "Revenue", "Profit", "Margin %", "Views"],
         icon: BarChart3,
+        color: "emerald",
     },
     {
         id: "category-breakdown",
@@ -65,10 +69,20 @@ const productReports: Array<ReportConfig & { description: string; formats: strin
         type: "products",
         description: "Product distribution and sales by category",
         formats: ["PDF", "XLSX"],
-        fields: ["Category", "Products Count", "Revenue", "Units", "Avg Price"],
+        fields: ["Category", "Products", "Revenue", "Profit", "Units", "Margin %"],
         icon: Package,
+        color: "cyan",
     },
 ];
+
+const colorClasses: Record<string, { bg: string; text: string }> = {
+    emerald: { bg: "bg-emerald-500/10", text: "text-emerald-600 dark:text-emerald-400" },
+    blue: { bg: "bg-blue-500/10", text: "text-blue-600 dark:text-blue-400" },
+    purple: { bg: "bg-purple-500/10", text: "text-purple-600 dark:text-purple-400" },
+    amber: { bg: "bg-amber-500/10", text: "text-amber-600 dark:text-amber-400" },
+    cyan: { bg: "bg-cyan-500/10", text: "text-cyan-600 dark:text-cyan-400" },
+    pink: { bg: "bg-pink-500/10", text: "text-pink-600 dark:text-pink-400" },
+};
 
 const formatIcons: Record<string, any> = {
     PDF: FileText,
@@ -113,6 +127,7 @@ export default function ProductsReportsPage() {
                     const isCurrentlyGenerating = isGenerating && currentReport === report.id;
                     const selectedFormat = getSelectedFormat(report.id, report.formats);
                     const ReportIcon = report.icon;
+                    const colors = colorClasses[report.color] || colorClasses.blue;
 
                     return (
                         <Card key={report.id} className={cn(isCurrentlyGenerating && "ring-2 ring-primary/20")}>
@@ -120,8 +135,8 @@ export default function ProductsReportsPage() {
                                 <div className="flex flex-col gap-4">
                                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                                         <div className="flex items-start gap-4">
-                                            <div className="p-2.5 rounded-lg bg-blue-500/10">
-                                                <ReportIcon className="h-5 w-5 text-blue-600" />
+                                            <div className={cn("p-2.5 rounded-lg", colors.bg)}>
+                                                <ReportIcon className={cn("h-5 w-5", colors.text)} />
                                             </div>
                                             <div>
                                                 <h3 className="font-semibold">{report.name}</h3>

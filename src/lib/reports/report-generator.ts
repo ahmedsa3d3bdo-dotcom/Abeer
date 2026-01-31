@@ -52,7 +52,7 @@ export interface SummaryItem {
     value: string | number;
     change?: number;
     format?: "currency" | "number" | "percentage" | "text";
-    color?: "emerald" | "blue" | "purple" | "amber" | "red" | "cyan" | "pink";
+    color?: "emerald" | "blue" | "purple" | "amber" | "red" | "cyan" | "pink" | "indigo";
 }
 
 // Chart data for analytics reports
@@ -320,7 +320,7 @@ export async function generateAnalyticsPDFReport(
             pdf.roundedRect(cardX, currentY, cardWidth, cardHeight, 2, 2, "FD");
 
             // Colored top accent based on item color or default
-            const accentColor = item.color ? colorMap[item.color] : colorMap.blue;
+            const accentColor = (item.color && colorMap[item.color]) ? colorMap[item.color] : colorMap.blue;
             pdf.setFillColor(...accentColor);
             pdf.rect(cardX, currentY, cardWidth, 3, "F");
             // Round top corners manually

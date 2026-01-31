@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
             .from(schema.inventory)
             .leftJoin(schema.products, eq(schema.inventory.productId, schema.products.id));
 
-        // Top products by revenue
+        // Top products by revenue with profit calculation
         const topProducts = await db
             .select({
                 id: schema.orderItems.productId,
@@ -63,9 +63,30 @@ export async function GET(request: NextRequest) {
                 sku: sql<string>`max(coalesce(${schema.orderItems.sku}, ''))`,
                 revenue: sql<number>`coalesce(sum(${schema.orderItems.totalPrice}), 0)`,
                 units: sql<number>`coalesce(sum(${schema.orderItems.quantity}), 0)`,
+                cost: sql<number>`
+                    COALESCE(
+                        SUM(
+                            COALESCE(${schema.productVariants.costPerItem}, ${schema.products.costPerItem}, 0)::numeric
+                            * ${schema.orderItems.quantity}
+                        ),
+                        0
+                    )
+                `,
+                profit: sql<number>`
+                    COALESCE(SUM(${schema.orderItems.totalPrice}::numeric), 0)
+                    - COALESCE(
+                        SUM(
+                            COALESCE(${schema.productVariants.costPerItem}, ${schema.products.costPerItem}, 0)::numeric
+                            * ${schema.orderItems.quantity}
+                        ),
+                        0
+                    )
+                `,
             })
             .from(schema.orderItems)
             .innerJoin(schema.orders, eq(schema.orderItems.orderId, schema.orders.id))
+            .leftJoin(schema.products, sql`${schema.products.id} = ${schema.orderItems.productId}` as any)
+            .leftJoin(schema.productVariants, sql`${schema.productVariants.id} = ${schema.orderItems.variantId}` as any)
             .where(
                 and(
                     gte(schema.orders.createdAt, from),
@@ -77,7 +98,7 @@ export async function GET(request: NextRequest) {
             .orderBy(desc(sql`coalesce(sum(${schema.orderItems.totalPrice}), 0)`))
             .limit(10);
 
-        // Bottom products (with at least 1 sale)
+        // Bottom products (with at least 1 sale) with profit calculation
         const bottomProducts = await db
             .select({
                 id: schema.orderItems.productId,
@@ -85,9 +106,30 @@ export async function GET(request: NextRequest) {
                 sku: sql<string>`max(coalesce(${schema.orderItems.sku}, ''))`,
                 revenue: sql<number>`coalesce(sum(${schema.orderItems.totalPrice}), 0)`,
                 units: sql<number>`coalesce(sum(${schema.orderItems.quantity}), 0)`,
+                cost: sql<number>`
+                    COALESCE(
+                        SUM(
+                            COALESCE(${schema.productVariants.costPerItem}, ${schema.products.costPerItem}, 0)::numeric
+                            * ${schema.orderItems.quantity}
+                        ),
+                        0
+                    )
+                `,
+                profit: sql<number>`
+                    COALESCE(SUM(${schema.orderItems.totalPrice}::numeric), 0)
+                    - COALESCE(
+                        SUM(
+                            COALESCE(${schema.productVariants.costPerItem}, ${schema.products.costPerItem}, 0)::numeric
+                            * ${schema.orderItems.quantity}
+                        ),
+                        0
+                    )
+                `,
             })
             .from(schema.orderItems)
             .innerJoin(schema.orders, eq(schema.orderItems.orderId, schema.orders.id))
+            .leftJoin(schema.products, sql`${schema.products.id} = ${schema.orderItems.productId}` as any)
+            .leftJoin(schema.productVariants, sql`${schema.productVariants.id} = ${schema.orderItems.variantId}` as any)
             .where(
                 and(
                     gte(schema.orders.createdAt, from),
@@ -99,7 +141,7 @@ export async function GET(request: NextRequest) {
             .orderBy(asc(sql`coalesce(sum(${schema.orderItems.totalPrice}), 0)`))
             .limit(5);
 
-        // Category performance
+        // Category performance with profit calculation
         const categoryPerformance = await db
             .select({
                 id: schema.categories.id,
@@ -107,11 +149,32 @@ export async function GET(request: NextRequest) {
                 revenue: sql<number>`coalesce(sum(${schema.orderItems.totalPrice}), 0)`,
                 units: sql<number>`coalesce(sum(${schema.orderItems.quantity}), 0)`,
                 products: sql<number>`count(distinct ${schema.orderItems.productId})`,
+                cost: sql<number>`
+                    COALESCE(
+                        SUM(
+                            COALESCE(${schema.productVariants.costPerItem}, ${schema.products.costPerItem}, 0)::numeric
+                            * ${schema.orderItems.quantity}
+                        ),
+                        0
+                    )
+                `,
+                profit: sql<number>`
+                    COALESCE(SUM(${schema.orderItems.totalPrice}::numeric), 0)
+                    - COALESCE(
+                        SUM(
+                            COALESCE(${schema.productVariants.costPerItem}, ${schema.products.costPerItem}, 0)::numeric
+                            * ${schema.orderItems.quantity}
+                        ),
+                        0
+                    )
+                `,
             })
             .from(schema.orderItems)
             .innerJoin(schema.orders, eq(schema.orderItems.orderId, schema.orders.id))
             .innerJoin(schema.productCategories, eq(schema.orderItems.productId, schema.productCategories.productId))
             .innerJoin(schema.categories, eq(schema.productCategories.categoryId, schema.categories.id))
+            .leftJoin(schema.products, sql`${schema.products.id} = ${schema.orderItems.productId}` as any)
+            .leftJoin(schema.productVariants, sql`${schema.productVariants.id} = ${schema.orderItems.variantId}` as any)
             .where(
                 and(
                     gte(schema.orders.createdAt, from),
@@ -164,6 +227,11 @@ export async function GET(request: NextRequest) {
                 sku: String(p.sku || ""),
                 revenue: Number(p.revenue || 0),
                 units: Number(p.units || 0),
+                cost: Number(p.cost || 0),
+                profit: Number(p.profit || 0),
+                profitMargin: Number(p.revenue || 0) > 0 
+                    ? (Number(p.profit || 0) / Number(p.revenue || 0)) * 100 
+                    : 0,
                 views: 0, // Would need analytics tracking
                 conversionRate: 0,
             })),
@@ -173,6 +241,11 @@ export async function GET(request: NextRequest) {
                 sku: String(p.sku || ""),
                 revenue: Number(p.revenue || 0),
                 units: Number(p.units || 0),
+                cost: Number(p.cost || 0),
+                profit: Number(p.profit || 0),
+                profitMargin: Number(p.revenue || 0) > 0 
+                    ? (Number(p.profit || 0) / Number(p.revenue || 0)) * 100 
+                    : 0,
             })),
             categoryPerformance: categoryPerformance.map((c) => ({
                 id: String(c.id),
@@ -180,6 +253,11 @@ export async function GET(request: NextRequest) {
                 revenue: Number(c.revenue || 0),
                 units: Number(c.units || 0),
                 products: Number(c.products || 0),
+                cost: Number(c.cost || 0),
+                profit: Number(c.profit || 0),
+                profitMargin: Number(c.revenue || 0) > 0 
+                    ? (Number(c.profit || 0) / Number(c.revenue || 0)) * 100 
+                    : 0,
             })),
             lowStockItems: lowStockItems.map((i) => ({
                 id: String(i.id),

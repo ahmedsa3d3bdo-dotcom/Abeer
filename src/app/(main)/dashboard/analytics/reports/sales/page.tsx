@@ -17,20 +17,27 @@ import {
     Check,
     FileSpreadsheet,
     FileCode,
+    Calendar as CalendarDays,
+    BarChart3,
+    Package,
+    Layers,
+    ListOrdered,
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useReportGenerator, type ReportFormat, type ReportConfig } from "@/hooks/use-report-generator";
 import { toast } from "sonner";
 
-const salesReports: Array<ReportConfig & { description: string; formats: string[]; fields: string[] }> = [
+const salesReports: Array<ReportConfig & { description: string; formats: string[]; fields: string[]; color: string; icon: string }> = [
     {
         id: "daily-summary",
         name: "Daily Sales Summary",
         type: "sales",
         description: "Overview of daily sales, revenue, and orders",
         formats: ["PDF", "XLSX"],
-        fields: ["Date", "Orders", "Revenue", "Average Order Value", "Top Products"],
+        fields: ["Date", "Orders", "Revenue", "Profit", "Average Order Value", "Top Products"],
+        color: "emerald",
+        icon: "calendar",
     },
     {
         id: "weekly-report",
@@ -38,7 +45,9 @@ const salesReports: Array<ReportConfig & { description: string; formats: string[
         type: "sales",
         description: "Detailed weekly breakdown with comparisons",
         formats: ["PDF", "XLSX"],
-        fields: ["Week", "Revenue", "Orders", "Growth %", "Best Day"],
+        fields: ["Week", "Revenue", "Profit", "Orders", "Growth %", "Best Day"],
+        color: "blue",
+        icon: "trending",
     },
     {
         id: "monthly-report",
@@ -46,7 +55,9 @@ const salesReports: Array<ReportConfig & { description: string; formats: string[
         type: "sales",
         description: "Comprehensive monthly analysis with trends",
         formats: ["PDF", "XLSX"],
-        fields: ["Month", "Revenue", "Orders", "New Customers", "Profit Margin"],
+        fields: ["Month", "Revenue", "Profit", "Orders", "New Customers", "Profit Margin"],
+        color: "purple",
+        icon: "chart",
     },
     {
         id: "order-details",
@@ -54,7 +65,9 @@ const salesReports: Array<ReportConfig & { description: string; formats: string[
         type: "sales",
         description: "Complete list of all orders with line items",
         formats: ["CSV", "XLSX"],
-        fields: ["Order ID", "Date", "Customer", "Products", "Total", "Status"],
+        fields: ["Order ID", "Date", "Customer", "Products", "Total", "Discount", "Status"],
+        color: "amber",
+        icon: "list",
     },
     {
         id: "revenue-by-product",
@@ -62,7 +75,9 @@ const salesReports: Array<ReportConfig & { description: string; formats: string[
         type: "sales",
         description: "Sales breakdown by individual products",
         formats: ["CSV", "XLSX"],
-        fields: ["Product", "SKU", "Units Sold", "Revenue", "Profit"],
+        fields: ["Product", "SKU", "Units Sold", "Revenue", "Cost", "Profit", "Margin %"],
+        color: "cyan",
+        icon: "package",
     },
     {
         id: "revenue-by-category",
@@ -70,7 +85,9 @@ const salesReports: Array<ReportConfig & { description: string; formats: string[
         type: "sales",
         description: "Sales performance by product category",
         formats: ["PDF", "XLSX"],
-        fields: ["Category", "Products", "Units", "Revenue", "Share %"],
+        fields: ["Category", "Products", "Units", "Revenue", "Profit", "Margin %", "Share %"],
+        color: "pink",
+        icon: "layers",
     },
 ];
 
@@ -78,6 +95,24 @@ const formatIcons: Record<string, any> = {
     PDF: FileText,
     XLSX: FileSpreadsheet,
     CSV: FileCode,
+};
+
+const reportIcons: Record<string, any> = {
+    calendar: CalendarDays,
+    trending: TrendingUp,
+    chart: BarChart3,
+    list: ListOrdered,
+    package: Package,
+    layers: Layers,
+};
+
+const colorClasses: Record<string, { bg: string; text: string }> = {
+    emerald: { bg: "bg-emerald-500/10", text: "text-emerald-600 dark:text-emerald-400" },
+    blue: { bg: "bg-blue-500/10", text: "text-blue-600 dark:text-blue-400" },
+    purple: { bg: "bg-purple-500/10", text: "text-purple-600 dark:text-purple-400" },
+    amber: { bg: "bg-amber-500/10", text: "text-amber-600 dark:text-amber-400" },
+    cyan: { bg: "bg-cyan-500/10", text: "text-cyan-600 dark:text-cyan-400" },
+    pink: { bg: "bg-pink-500/10", text: "text-pink-600 dark:text-pink-400" },
 };
 
 export default function SalesReportsPage() {
@@ -144,6 +179,8 @@ export default function SalesReportsPage() {
                 {salesReports.map((report) => {
                     const isCurrentlyGenerating = isGenerating && currentReport === report.id;
                     const selectedFormat = getSelectedFormat(report.id, report.formats);
+                    const Icon = reportIcons[report.icon] || TrendingUp;
+                    const colors = colorClasses[report.color] || colorClasses.emerald;
 
                     return (
                         <Card key={report.id} className={cn(isCurrentlyGenerating && "ring-2 ring-primary/20")}>
@@ -151,8 +188,8 @@ export default function SalesReportsPage() {
                                 <div className="flex flex-col gap-4">
                                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                                         <div className="flex items-start gap-4">
-                                            <div className="p-2.5 rounded-lg bg-emerald-500/10">
-                                                <TrendingUp className="h-5 w-5 text-emerald-600" />
+                                            <div className={cn("p-2.5 rounded-lg", colors.bg)}>
+                                                <Icon className={cn("h-5 w-5", colors.text)} />
                                             </div>
                                             <div>
                                                 <h3 className="font-semibold">{report.name}</h3>

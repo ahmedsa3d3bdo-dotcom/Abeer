@@ -68,16 +68,43 @@ export async function GET(request: NextRequest) {
                 )
             );
 
-        // Revenue by day
+        // Revenue by day with proper profit calculation
         const revenueByDay = await db
             .select({
                 date: sql<string>`date_trunc('day', ${schema.orders.createdAt})::date`,
                 revenue: sql<number>`coalesce(sum(${schema.orders.totalAmount}), 0)`,
                 orders: sql<number>`count(*)`,
-                // Simplified profit calculation - would need proper cost tracking
-                profit: sql<number>`coalesce(sum(${schema.orders.totalAmount}) * 0.3, 0)`,
             })
             .from(schema.orders)
+            .where(
+                and(
+                    gte(schema.orders.createdAt, currentFrom),
+                    lte(schema.orders.createdAt, currentTo),
+                    ne(schema.orders.status, "cancelled")
+                )
+            )
+            .groupBy(sql`date_trunc('day', ${schema.orders.createdAt})::date`)
+            .orderBy(sql`date_trunc('day', ${schema.orders.createdAt})::date`);
+
+        // Calculate profit by day using actual costs
+        const profitByDay = await db
+            .select({
+                date: sql<string>`date_trunc('day', ${schema.orders.createdAt})::date`,
+                profit: sql<number>`
+                    COALESCE(SUM(${schema.orderItems.totalPrice}::numeric), 0)
+                    - COALESCE(
+                        SUM(
+                            COALESCE(${schema.productVariants.costPerItem}, ${schema.products.costPerItem}, 0)::numeric
+                            * ${schema.orderItems.quantity}
+                        ),
+                        0
+                    )
+                `,
+            })
+            .from(schema.orderItems)
+            .leftJoin(schema.orders, sql`${schema.orders.id} = ${schema.orderItems.orderId}` as any)
+            .leftJoin(schema.products, sql`${schema.products.id} = ${schema.orderItems.productId}` as any)
+            .leftJoin(schema.productVariants, sql`${schema.productVariants.id} = ${schema.orderItems.variantId}` as any)
             .where(
                 and(
                     gte(schema.orders.createdAt, currentFrom),
@@ -128,16 +155,37 @@ export async function GET(request: NextRequest) {
             .groupBy(sql`coalesce(${schema.orders.paymentMethod}::text, 'Unknown')`)
             .orderBy(desc(sql`coalesce(sum(${schema.orders.totalAmount}), 0)`));
 
-        // Top products
+        // Top products with profit calculation
         const topProducts = await db
             .select({
                 id: schema.orderItems.productId,
                 name: sql<string>`max(${schema.orderItems.productName})`,
                 revenue: sql<number>`coalesce(sum(${schema.orderItems.totalPrice}), 0)`,
                 units: sql<number>`coalesce(sum(${schema.orderItems.quantity}), 0)`,
+                cost: sql<number>`
+                    COALESCE(
+                        SUM(
+                            COALESCE(${schema.productVariants.costPerItem}, ${schema.products.costPerItem}, 0)::numeric
+                            * ${schema.orderItems.quantity}
+                        ),
+                        0
+                    )
+                `,
+                profit: sql<number>`
+                    COALESCE(SUM(${schema.orderItems.totalPrice}::numeric), 0)
+                    - COALESCE(
+                        SUM(
+                            COALESCE(${schema.productVariants.costPerItem}, ${schema.products.costPerItem}, 0)::numeric
+                            * ${schema.orderItems.quantity}
+                        ),
+                        0
+                    )
+                `,
             })
             .from(schema.orderItems)
             .innerJoin(schema.orders, eq(schema.orderItems.orderId, schema.orders.id))
+            .leftJoin(schema.products, sql`${schema.products.id} = ${schema.orderItems.productId}` as any)
+            .leftJoin(schema.productVariants, sql`${schema.productVariants.id} = ${schema.orderItems.variantId}` as any)
             .where(
                 and(
                     gte(schema.orders.createdAt, currentFrom),
@@ -181,21 +229,32 @@ export async function GET(request: NextRequest) {
             });
         }
 
+        // Merge profit data with revenue data
+        const profitByDateMap = new Map(profitByDay.map((p) => [p.date, Number(p.profit || 0)]));
+        const revenueByDayWithProfit = revenueByDay.map((d) => ({
+            date: d.date,
+            revenue: Number(d.revenue || 0),
+            orders: Number(d.orders || 0),
+            profit: profitByDateMap.get(d.date) || 0,
+        }));
+
+        // Calculate total profit for summary
+        const totalProfit = profitByDay.reduce((sum, p) => sum + Number(p.profit || 0), 0);
+
         return successResponse({
             summary: {
                 totalRevenue: Number(currentSummary?.totalRevenue || 0),
                 totalOrders: Number(currentSummary?.totalOrders || 0),
                 averageOrderValue: Number(currentSummary?.averageOrderValue || 0),
+                totalProfit: Number(totalProfit),
+                profitMargin: Number(currentSummary?.totalRevenue || 0) > 0 
+                    ? (totalProfit / Number(currentSummary?.totalRevenue || 0)) * 100 
+                    : 0,
                 conversionRate: 3.2, // Placeholder - would need sessions data
                 previousRevenue: Number(previousSummary?.totalRevenue || 0),
                 previousOrders: Number(previousSummary?.totalOrders || 0),
             },
-            revenueByDay: revenueByDay.map((d) => ({
-                date: d.date,
-                revenue: Number(d.revenue || 0),
-                orders: Number(d.orders || 0),
-                profit: Number(d.profit || 0),
-            })),
+            revenueByDay: revenueByDayWithProfit,
             ordersByStatus: ordersByStatusWithPercentage,
             revenueByPayment: revenueByPayment.map((p) => ({
                 method: String(p.method || "Unknown"),
@@ -207,6 +266,11 @@ export async function GET(request: NextRequest) {
                 name: String(p.name || "Unknown Product"),
                 revenue: Number(p.revenue || 0),
                 units: Number(p.units || 0),
+                cost: Number(p.cost || 0),
+                profit: Number(p.profit || 0),
+                profitMargin: Number(p.revenue || 0) > 0 
+                    ? (Number(p.profit || 0) / Number(p.revenue || 0)) * 100 
+                    : 0,
             })),
             salesByHour: salesByHourFilled,
         });
