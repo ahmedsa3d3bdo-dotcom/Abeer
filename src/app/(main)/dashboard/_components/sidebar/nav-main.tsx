@@ -60,8 +60,8 @@ const NavItemExpanded = ({
       onOpenChange={item.subItems ? onOpenChange : undefined}
       className="group/collapsible"
     >
-      <SidebarMenuItem>
-        <CollapsibleTrigger asChild>
+      <SidebarMenuItem suppressHydrationWarning>
+        <CollapsibleTrigger asChild suppressHydrationWarning>
           {item.subItems ? (
             <SidebarMenuButton
               disabled={item.comingSoon}
@@ -95,7 +95,7 @@ const NavItemExpanded = ({
           )}
         </CollapsibleTrigger>
         {item.subItems && (
-          <CollapsibleContent>
+          <CollapsibleContent suppressHydrationWarning>
             <SidebarMenuSub>
               {item.subItems.map((subItem) => (
                 <SidebarMenuSubItem key={subItem.title}>

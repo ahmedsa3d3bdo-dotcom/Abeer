@@ -26,12 +26,15 @@ import {
 } from "recharts";
 import { toast } from "sonner";
 import { useAnalyticsExport, type AnalyticsExportConfig } from "@/hooks/use-analytics-export";
+import { exportChartAsPNG } from "@/lib/reports/simple-chart-export";
 
 interface SalesData {
     summary: {
         totalRevenue: number;
         totalOrders: number;
         averageOrderValue: number;
+        totalProfit: number;
+        profitMargin: number;
         conversionRate: number;
         previousRevenue: number;
         previousOrders: number;
@@ -39,7 +42,15 @@ interface SalesData {
     revenueByDay: Array<{ date: string; revenue: number; orders: number; profit: number }>;
     ordersByStatus: Array<{ status: string; count: number; percentage: number }>;
     revenueByPayment: Array<{ method: string; amount: number; count: number }>;
-    topProducts: Array<{ id: string; name: string; revenue: number; units: number }>;
+    topProducts: Array<{ 
+        id: string; 
+        name: string; 
+        revenue: number; 
+        units: number;
+        cost: number;
+        profit: number;
+        profitMargin: number;
+    }>;
     salesByHour: Array<{ hour: number; orders: number; revenue: number }>;
 }
 
@@ -79,35 +90,68 @@ export default function SalesAnalyticsPage() {
     const handleExport = async (format: "pdf" | "xlsx") => {
         if (!data) return;
 
-        const config: AnalyticsExportConfig = {
-            id: "sales",
-            name: "Sales Analytics",
-            type: "sales",
-            description: "Track revenue, orders, and payment trends",
-            formats: ["pdf", "xlsx"],
-            fetchData: async () => ({
-                summary: [
-                    { label: "Total Revenue", value: data.summary.totalRevenue, format: "currency" },
-                    { label: "Total Orders", value: data.summary.totalOrders, format: "number" },
-                    { label: "Average Order Value", value: data.summary.averageOrderValue, format: "currency" },
-                    { label: "Conversion Rate", value: data.summary.conversionRate, format: "percentage" },
-                ],
-                charts: [],
+        try {
+            const config: AnalyticsExportConfig = {
+                id: "sales",
+                name: "Sales Analytics",
+                type: "sales",
+                description: "Track revenue, orders, and payment trends",
+                formats: ["pdf", "xlsx"],
+                fetchData: async () => ({
+                    summary: [
+                        { label: "Total Revenue", value: data.summary.totalRevenue, format: "currency", color: "emerald" },
+                        { label: "Total Profit", value: data.summary.totalProfit, format: "currency", color: "blue" },
+                        { label: "Profit Margin", value: data.summary.profitMargin, format: "percentage", color: "purple" },
+                        { label: "Total Orders", value: data.summary.totalOrders, format: "number", color: "amber" },
+                        { label: "Average Order Value", value: data.summary.averageOrderValue, format: "currency", color: "indigo" },
+                        { label: "Conversion Rate", value: data.summary.conversionRate, format: "percentage", color: "pink" },
+                    ],
+                    charts: [],
                 tables: [
+                    {
+                        title: "Revenue Trend",
+                        columns: [
+                            { header: "Date", key: "date", width: 20 },
+                            { header: "Revenue", key: "revenue", format: "currency", align: "right", width: 20 },
+                            { header: "Orders", key: "orders", format: "number", align: "right", width: 15 },
+                            { header: "Profit", key: "profit", format: "currency", align: "right", width: 20 },
+                        ],
+                        data: data.revenueByDay.map((d) => ({
+                            date: new Date(d.date).toLocaleDateString("en-CA"),
+                            revenue: d.revenue,
+                            orders: d.orders,
+                            profit: d.profit,
+                        })),
+                    },
                     {
                         title: "Top Selling Products",
                         columns: [
                             { header: "Rank", key: "rank", width: 10, align: "center" },
-                            { header: "Product", key: "name", width: 35 },
-                            { header: "Units", key: "units", format: "number", align: "right", width: 15 },
-                            { header: "Revenue", key: "revenue", format: "currency", align: "right", width: 20 },
+                            { header: "Product", key: "name", width: 25 },
+                            { header: "Units", key: "units", format: "number", align: "right", width: 12 },
+                            { header: "Revenue", key: "revenue", format: "currency", align: "right", width: 15 },
+                            { header: "Cost", key: "cost", format: "currency", align: "right", width: 15 },
+                            { header: "Profit", key: "profit", format: "currency", align: "right", width: 15 },
+                            { header: "Margin %", key: "profitMargin", format: "percentage", align: "right", width: 12 },
                         ],
                         data: data.topProducts.map((p, i) => ({
                             rank: i + 1,
                             name: p.name,
                             units: p.units,
                             revenue: p.revenue,
+                            cost: p.cost,
+                            profit: p.profit,
+                            profitMargin: p.profitMargin,
                         })),
+                    },
+                    {
+                        title: "Orders by Status",
+                        columns: [
+                            { header: "Status", key: "status", width: 30 },
+                            { header: "Count", key: "count", format: "number", align: "center", width: 20 },
+                            { header: "Percentage", key: "percentage", format: "percentage", align: "right", width: 20 },
+                        ],
+                        data: data.ordersByStatus,
                     },
                     {
                         title: "Revenue by Payment Method",
@@ -119,19 +163,27 @@ export default function SalesAnalyticsPage() {
                         data: data.revenueByPayment,
                     },
                     {
-                        title: "Orders by Status",
+                        title: "Sales by Hour",
                         columns: [
-                            { header: "Status", key: "status", width: 30 },
-                            { header: "Count", key: "count", format: "number", align: "center", width: 20 },
-                            { header: "Percentage", key: "percentage", format: "percentage", align: "right", width: 20 },
+                            { header: "Hour", key: "hour", width: 20 },
+                            { header: "Orders", key: "orders", format: "number", align: "right", width: 20 },
+                            { header: "Revenue", key: "revenue", format: "currency", align: "right", width: 25 },
                         ],
-                        data: data.ordersByStatus,
+                        data: data.salesByHour.map((h) => ({
+                            hour: `${h.hour}:00`,
+                            orders: h.orders,
+                            revenue: h.revenue,
+                        })),
                     },
                 ],
             }),
-        };
+            };
 
-        await exportData(config, format, dateRange);
+            await exportData(config, format, dateRange);
+        } catch (error) {
+            console.error("Export failed:", error);
+            toast.error("Failed to export report");
+        }
     };
 
     const calculateChange = (current: number, previous: number) => {
@@ -198,7 +250,7 @@ export default function SalesAnalyticsPage() {
             </div>
 
             {/* KPI Cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
                 <KPICard
                     title="Total Revenue"
                     value={fmt(data.summary.totalRevenue)}
@@ -207,31 +259,56 @@ export default function SalesAnalyticsPage() {
                     color="emerald"
                 />
                 <KPICard
+                    title="Total Profit"
+                    value={fmt(data.summary.totalProfit)}
+                    icon={TrendingUp}
+                    color="blue"
+                />
+                <KPICard
+                    title="Profit Margin"
+                    value={`${data.summary.profitMargin.toFixed(1)}%`}
+                    icon={Percent}
+                    color="purple"
+                />
+                <KPICard
                     title="Total Orders"
                     value={data.summary.totalOrders.toLocaleString()}
                     change={ordersChange}
                     icon={ShoppingCart}
-                    color="blue"
+                    color="amber"
                 />
                 <KPICard
-                    title="Average Order Value"
+                    title="Avg Order Value"
                     value={fmt(data.summary.averageOrderValue)}
                     icon={CreditCard}
-                    color="purple"
-                />
-                <KPICard
-                    title="Conversion Rate"
-                    value={`${data.summary.conversionRate.toFixed(1)}%`}
-                    icon={Percent}
-                    color="amber"
+                    color="indigo"
                 />
             </div>
 
             {/* Revenue Trend Chart */}
             <Card>
                 <CardHeader>
-                    <CardTitle>Revenue & Orders Trend</CardTitle>
-                    <CardDescription>Daily breakdown of sales performance</CardDescription>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle>Revenue & Orders Trend</CardTitle>
+                            <CardDescription>Daily breakdown of sales performance</CardDescription>
+                        </div>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                                try {
+                                    await exportChartAsPNG("sales-revenue-chart", "sales-revenue-trend");
+                                    toast.success("Chart exported successfully");
+                                } catch (error) {
+                                    toast.error("Failed to export chart");
+                                }
+                            }}
+                        >
+                            <Download className="h-4 w-4 mr-2" />
+                            Export Chart
+                        </Button>
+                    </div>
                 </CardHeader>
                 <CardContent>
                     <div id="sales-revenue-chart" className="h-[350px]">
@@ -313,8 +390,27 @@ export default function SalesAnalyticsPage() {
                 {/* Orders by Status */}
                 <Card>
                     <CardHeader>
-                        <CardTitle>Orders by Status</CardTitle>
-                        <CardDescription>Distribution of order statuses</CardDescription>
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <CardTitle>Orders by Status</CardTitle>
+                                <CardDescription>Distribution of order statuses</CardDescription>
+                            </div>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={async () => {
+                                    try {
+                                        await exportChartAsPNG("sales-orders-status-chart", "orders-by-status");
+                                        toast.success("Chart exported successfully");
+                                    } catch (error) {
+                                        toast.error("Failed to export chart");
+                                    }
+                                }}
+                            >
+                                <Download className="h-4 w-4 mr-2" />
+                                Export
+                            </Button>
+                        </div>
                     </CardHeader>
                     <CardContent>
                         <div id="sales-orders-status-chart" className="h-[280px]">
@@ -329,11 +425,15 @@ export default function SalesAnalyticsPage() {
                                         paddingAngle={2}
                                         dataKey="count"
                                         nameKey="status"
-                                        label={({ status, percentage }) => `${status}: ${percentage.toFixed(0)}%`}
+                                        label={({ status, percentage }) => {
+                                            const pct = percentage.toFixed(0);
+                                            return parseFloat(pct) > 3 ? `${status}: ${pct}%` : '';
+                                        }}
+                                        labelLine={false}
                                     >
                                         {data.ordersByStatus.map((entry, index) => (
                                             <Cell
-                                                key={`cell-${index}`}
+                                                key={`order-status-${entry.status}-${index}`}
                                                 fill={STATUS_COLORS[entry.status] || COLORS[index % COLORS.length]}
                                             />
                                         ))}
@@ -351,21 +451,24 @@ export default function SalesAnalyticsPage() {
                 <Card>
                     <CardHeader>
                         <CardTitle>Top Selling Products</CardTitle>
-                        <CardDescription>Products by revenue contribution</CardDescription>
+                        <CardDescription>Products by revenue and profit margin</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-4">
                             {data.topProducts.slice(0, 5).map((product, index) => (
-                                <div key={product.id} className="flex items-center gap-3">
+                                <div key={`top-product-${product.id}-${index}`} className="flex items-center gap-3">
                                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium">
                                         {index + 1}
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <p className="font-medium truncate">{product.name}</p>
-                                        <p className="text-xs text-muted-foreground">{product.units} units sold</p>
+                                        <p className="text-xs text-muted-foreground">
+                                            {product.units} units • {product.profitMargin.toFixed(1)}% margin
+                                        </p>
                                     </div>
                                     <div className="text-right">
                                         <p className="font-medium text-emerald-600">{fmt(product.revenue)}</p>
+                                        <p className="text-xs text-blue-600">{fmt(product.profit)} profit</p>
                                     </div>
                                 </div>
                             ))}
@@ -377,8 +480,27 @@ export default function SalesAnalyticsPage() {
             {/* Payment Methods */}
             <Card>
                 <CardHeader>
-                    <CardTitle>Revenue by Payment Method</CardTitle>
-                    <CardDescription>How customers are paying for orders</CardDescription>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle>Revenue by Payment Method</CardTitle>
+                            <CardDescription>How customers are paying for orders</CardDescription>
+                        </div>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                                try {
+                                    await exportChartAsPNG("sales-payment-chart", "revenue-by-payment-method");
+                                    toast.success("Chart exported successfully");
+                                } catch (error) {
+                                    toast.error("Failed to export chart");
+                                }
+                            }}
+                        >
+                            <Download className="h-4 w-4 mr-2" />
+                            Export
+                        </Button>
+                    </div>
                 </CardHeader>
                 <CardContent>
                     <div id="sales-payment-chart" className="h-[300px]">
@@ -401,8 +523,27 @@ export default function SalesAnalyticsPage() {
             {/* Sales Timing */}
             <Card>
                 <CardHeader>
-                    <CardTitle>Sales by Hour of Day</CardTitle>
-                    <CardDescription>When customers are most active</CardDescription>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <CardTitle>Sales by Hour of Day</CardTitle>
+                            <CardDescription>When customers are most active</CardDescription>
+                        </div>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                                try {
+                                    await exportChartAsPNG("sales-timing-chart", "sales-by-hour");
+                                    toast.success("Chart exported successfully");
+                                } catch (error) {
+                                    toast.error("Failed to export chart");
+                                }
+                            }}
+                        >
+                            <Download className="h-4 w-4 mr-2" />
+                            Export
+                        </Button>
+                    </div>
                 </CardHeader>
                 <CardContent>
                     <div id="sales-timing-chart" className="h-[300px]">
@@ -444,13 +585,14 @@ function KPICard({
     value: string;
     change?: number;
     icon: React.ElementType;
-    color: "emerald" | "blue" | "purple" | "amber";
+    color: "emerald" | "blue" | "purple" | "amber" | "indigo";
 }) {
     const colorClasses = {
         emerald: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
         blue: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
         purple: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
         amber: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+        indigo: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400",
     };
 
     return (

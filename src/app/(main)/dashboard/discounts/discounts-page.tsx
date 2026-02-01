@@ -495,17 +495,13 @@ export default function DiscountsPage() {
 
   return (
     <div className="@container/main flex flex-col gap-4 md:gap-6">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
         <MetricCard title="Total discounts" value={metrics?.totalDiscounts ?? total} icon={Layers} tone="blue" />
         <MetricCard title="Active" value={Number(metrics?.activeCount ?? 0)} icon={CheckCircle2} tone="emerald" />
         <MetricCard title="Draft" value={Number(metrics?.draftCount ?? 0)} icon={Clock} tone="amber" />
         <MetricCard title="Expired" value={Number(metrics?.expiredCount ?? 0)} icon={X} tone="rose" />
         <MetricCard title="Archived" value={Number(metrics?.archivedCount ?? 0)} icon={Archive} tone="slate" />
-      </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard title="Total usage" value={Number(metrics?.totalUsage ?? 0)} icon={Users} tone="blue" />
-        <MetricCard title="Discount given" value={formatCurrency(Number(metrics?.totalDiscountGiven ?? 0), { currency: metrics?.currency || "CAD", locale: "en-CA" })} icon={DollarSign} tone="emerald" />
-        <MetricCard title="Discount (30d)" value={formatCurrency(Number(metrics?.totalDiscountGiven30d ?? 0), { currency: metrics?.currency || "CAD", locale: "en-CA" })} icon={DollarSign} tone="amber" />
       </div>
       {/* Toolbar */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">

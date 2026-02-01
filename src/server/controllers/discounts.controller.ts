@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { discountsService } from "../services/discounts.service";
+import { discountExpirationService } from "../services/discount-expiration.service";
 import { db } from "@/shared/db";
 import * as schema from "@/shared/db/schema";
 import { desc, eq, inArray, sql } from "drizzle-orm";
@@ -79,6 +80,7 @@ export class DiscountsController {
   static async list(request: NextRequest) {
     try {
       await requirePermission(request, "discounts.view");
+      discountExpirationService.ensureInternalSchedulerStarted();
       const query = validateQuery(request.nextUrl.searchParams, listQuerySchema);
       const result = await discountsService.list(query as any);
       if (!result.success) return NextResponse.json({ success: false, error: result.error }, { status: 400 });
@@ -285,6 +287,7 @@ export class DiscountsController {
   static async metrics(request: NextRequest) {
     try {
       await requirePermission(request, "discounts.view");
+      discountExpirationService.ensureInternalSchedulerStarted();
       const query = validateQuery(request.nextUrl.searchParams, listQuerySchema);
 
       const filters: any[] = [];

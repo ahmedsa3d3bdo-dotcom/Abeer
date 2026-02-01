@@ -294,14 +294,12 @@ export default function ProductsPage() {
   return (
     <div className="@container/main flex flex-col gap-4 md:gap-6">
       {/* Metrics Header */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <MetricCard title="Total products" value={metrics?.totalProducts ?? total} icon={Package} tone="blue" />
         <MetricCard title="Active" value={metrics?.activeProducts ?? "—"} icon={CheckCircle2} tone="emerald" />
         <MetricCard title="Featured" value={metrics?.featuredProducts ?? "—"} icon={Star} tone="violet" />
         <MetricCard title="Low stock" value={metrics?.lowStockProducts ?? "—"} icon={AlertTriangle} tone="amber" />
         <MetricCard title="Out of stock" value={metrics?.outOfStockProducts ?? "—"} icon={Ban} tone="rose" />
-        <MetricCard title="Avg price" value={num.format(Number(metrics?.avgPrice ?? 0))} icon={DollarSign} tone="slate" />
-        <MetricCard title="Total Sales (30d)" value={num.format(Number(metrics?.revenue30d ?? 0))} icon={DollarSign} tone="emerald" />
         <MetricCard title="Units sold (30d)" value={Number(metrics?.unitsSold30d ?? 0)} icon={BarChart3} tone="amber" />
       </div>
       {/* Toolbar */}

@@ -237,12 +237,10 @@ export default function CustomersPage() {
   return (
     <div className="@container/main flex flex-col gap-4 md:gap-6">
       {/* Metrics Header */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard title="Total customers" value={metrics?.totalCustomers ?? total} icon={Users} tone="blue" />
         <MetricCard title="Active customers" value={metrics?.activeCustomers ?? "—"} icon={UserCheck} tone="emerald" />
         <MetricCard title="New last 30 days" value={metrics?.newCustomers30d ?? "—"} icon={UserPlus} tone="violet" />
-        <MetricCard title="Total spent" value={formatCurrency(Number(metrics?.totalSpent ?? 0), { currency: metrics?.currency || currency, locale: "en-CA" })} icon={DollarSign} tone="emerald" />
-        <MetricCard title="Avg order value" value={formatCurrency(Number(metrics?.avgOrderValue ?? 0), { currency: metrics?.currency || currency, locale: "en-CA" })} icon={DollarSign} tone="slate" />
         <MetricCard title="Returning customers" value={metrics?.returningCustomers ?? "—"} icon={Repeat} tone="amber" />
       </div>
 

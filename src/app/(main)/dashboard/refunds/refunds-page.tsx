@@ -262,10 +262,8 @@ export default function RefundsPage() {
 
   return (
     <div className="@container/main flex flex-col gap-4 md:gap-6">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard title="Total refunds" value={metrics?.totalRefunds ?? total} icon={Layers} tone="blue" />
-        <MetricCard title="Total amount" value={formatCurrency(Number(metrics?.totalAmount ?? 0), { currency: metrics?.currency || "CAD", locale: "en-CA" })} icon={DollarSign} tone="emerald" />
-        <MetricCard title="Avg amount" value={formatCurrency(Number(metrics?.avgAmount ?? 0), { currency: metrics?.currency || "CAD", locale: "en-CA" })} icon={DollarSign} tone="slate" />
         <MetricCard title="Approved" value={Number(metrics?.approvedCount ?? 0)} icon={CheckCircle2} tone="emerald" />
         <MetricCard title="Processed" value={Number(metrics?.processedCount ?? 0)} icon={Cog} tone="violet" />
         <MetricCard title="Pending" value={Number(metrics?.pendingCount ?? 0)} icon={Clock} tone="amber" />

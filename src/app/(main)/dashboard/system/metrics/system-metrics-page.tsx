@@ -111,7 +111,7 @@ const netChartConfig = {
 
 export default function SystemMetricsPage() {
   const locale = useAppLocale();
-  const [range, setRange] = useState<Range>("current");
+  const [range, setRange] = useState<Range>("24h");
   const [loading, setLoading] = useState(false);
   const [payload, setPayload] = useState<MetricsPayload | null>(null);
 

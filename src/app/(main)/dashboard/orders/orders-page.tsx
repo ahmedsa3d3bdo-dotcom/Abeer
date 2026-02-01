@@ -257,12 +257,9 @@ export default function OrdersPage() {
   return (
     <div className="@container/main flex flex-col gap-4 md:gap-6">
       {/* Metrics Header */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard title="Total orders" value={metrics?.totalOrders ?? total} icon={ShoppingCart} tone="blue" />
-        <MetricCard title="Total Sales" value={num.format(Number(metrics?.revenueTotal ?? 0))} icon={DollarSign} tone="emerald" />
-        <MetricCard title="Avg order value" value={num.format(Number(metrics?.avgOrderValue ?? 0))} icon={DollarSign} tone="violet" />
         <MetricCard title="Orders (30d)" value={Number(metrics?.orders30d ?? 0)} icon={Calendar} tone="amber" />
-        <MetricCard title="Total Sales (30d)" value={num.format(Number(metrics?.revenue30d ?? 0))} icon={BarChart3} tone="emerald" />
         <MetricCard
           title="Paid orders"
           value={Number(metrics?.paidOrders ?? 0)}

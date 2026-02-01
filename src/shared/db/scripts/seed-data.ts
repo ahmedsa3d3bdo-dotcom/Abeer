@@ -123,6 +123,8 @@ export const PERMISSIONS_DATA = [
   { resource: "health", action: "view", name: "View Health", slug: "health.view" },
   { resource: "health", action: "manage", name: "Manage Health", slug: "health.manage" },
   { resource: "reports", action: "view", name: "View Reports", slug: "reports.view" },
+  { resource: "analytics", action: "view", name: "View Analytics", slug: "analytics.view" },
+  { resource: "analytics", action: "manage", name: "Manage Analytics", slug: "analytics.manage" },
   { resource: "backups", action: "view", name: "View Backups", slug: "backups.view" },
   { resource: "backups", action: "manage", name: "Manage Backups", slug: "backups.manage" },
   { resource: "reviews", action: "view", name: "View Reviews", slug: "reviews.view" },

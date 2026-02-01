@@ -60,16 +60,16 @@ export function MetricCard({
         className,
       )}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col gap-3">
+        <div className={cn("w-fit rounded-lg p-2", styles.chip)}>
+          <Icon className="h-5 w-5 text-white" />
+        </div>
         <div className="min-w-0">
-          <div className="text-xs text-muted-foreground">{title}</div>
-          <div className="mt-1 text-2xl font-semibold leading-tight tabular-nums">{value}</div>
+          <div className="text-2xl font-semibold leading-tight tabular-nums break-words">{value}</div>
+          <div className="mt-1 text-xs text-muted-foreground">{title}</div>
           {subtitle !== undefined && subtitle !== null && (
             <div className="mt-1 text-xs text-muted-foreground">{subtitle}</div>
           )}
-        </div>
-        <div className={cn("shrink-0 rounded-lg p-2", styles.chip)}>
-          <Icon className="h-5 w-5 text-white" />
         </div>
       </div>
     </div>
