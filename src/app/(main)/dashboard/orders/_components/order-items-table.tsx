@@ -19,7 +19,7 @@ export function OrderItemsTable(props: {
   const { d, currency, locale, promotionNames, mode = "drawer" } = props;
 
   const groups = buildBxgyGroups(d);
-  const fmt = (value: number) => formatCurrency(value, { currency, locale });
+  const fmt = (value: number) => formatCurrency(value, { currency, locale }).replace(/^[A-Z]{2,3}\$?/, '$');
 
   const wrapClassName = mode === "drawer" ? "overflow-x-auto" : "";
   const tableClassName = mode === "drawer" ? "min-w-[980px] w-full" : "w-full";

@@ -43,7 +43,7 @@ export function PriceSummary({
     showTotalDiscounts = true,
     size = "md",
 }: PriceSummaryProps) {
-    const fmt = (value: number) => formatCurrency(value, { currency, locale });
+    const fmt = (value: number) => formatCurrency(value, { currency, locale }).replace(/^[A-Z]{2,3}\$?/, '$');
 
     const textSize = size === "sm" ? "text-xs" : "text-sm";
     const labelColor = "text-muted-foreground";
@@ -187,7 +187,7 @@ interface InvoicePriceSummaryProps {
 }
 
 export function InvoicePriceSummary({ totals, currency = "CAD", locale = "en-CA", className }: InvoicePriceSummaryProps) {
-    const fmt = (value: number) => formatCurrency(value, { currency, locale });
+    const fmt = (value: number) => formatCurrency(value, { currency, locale }).replace(/^[A-Z]{2,3}\$?/, '$');
     const discountColor = "text-green-700 dark:text-green-300";
 
     return (

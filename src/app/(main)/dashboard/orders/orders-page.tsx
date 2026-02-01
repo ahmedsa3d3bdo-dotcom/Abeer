@@ -416,14 +416,14 @@ export default function OrdersPage() {
 
       {/* Details drawer */}
       <Sheet open={detailOpen} onOpenChange={(o) => setDetailOpen(o)}>
-        <SheetContent side="right" className="w-full sm:max-w-xl flex flex-col overflow-hidden">
-          <SheetHeader className="border-b">
-            <SheetTitle>
-              {detail ? `Order #${detail.order?.orderNumber}` : "Order details"}
+        <SheetContent side="right" className="w-full sm:max-w-2xl p-0 flex flex-col" suppressHydrationWarning>
+          <SheetHeader className="px-6 pt-6 pb-4 border-b">
+            <SheetTitle className="text-xl">
+              {detail ? `Order #${detail.order?.orderNumber}` : "Order Details"}
             </SheetTitle>
           </SheetHeader>
-          <div className="flex-1 overflow-y-auto no-scrollbar">
-            <div className="px-4 pb-6 pt-4 space-y-5">
+          <div className="flex-1 px-6 overflow-y-auto scrollbar-hide">
+            <div className="py-6 space-y-6">
               {detailLoading && <div className="text-sm text-muted-foreground">Loading...</div>}
               {!detailLoading && detail && (
                 <>

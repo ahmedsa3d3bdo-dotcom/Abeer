@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, RefreshCcw, Users, UserPlus, UserCheck, Repeat, DollarSign } from "lucide-react";
+import { Plus, RefreshCcw, Users, UserPlus, UserCheck, Repeat, DollarSign, ShoppingCart, TrendingUp, Calendar, MapPin, CreditCard, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { MetricCard } from "@/components/common/metric-card";
 import { UniversalBadge } from "@/components/common/universal-badge";
@@ -349,110 +349,162 @@ export default function CustomersPage() {
 
       {/* Details Drawer */}
       <Sheet open={drawerOpen} onOpenChange={(o) => setDrawerOpen(o)}>
-        <SheetContent className="w-full sm:max-w-xl flex flex-col overflow-hidden">
-          <div className="shrink-0">
-            <SheetHeader className="border-b">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0">
-                  <SheetTitle>Customer details</SheetTitle>
-                  <SheetDescription>Overview and recent orders</SheetDescription>
-                </div>
-              </div>
-            </SheetHeader>
-          </div>
+        <SheetContent className="w-full sm:max-w-3xl p-0 flex flex-col" suppressHydrationWarning>
+          <SheetHeader className="px-6 pt-6 pb-4 border-b">
+            <SheetTitle className="text-xl">Customer Details</SheetTitle>
+            <SheetDescription>Overview and recent orders</SheetDescription>
+          </SheetHeader>
+          
           {viewing && (
-            <div className="flex-1 overflow-y-auto no-scrollbar">
-              <div className="px-4 pb-6 pt-4 space-y-5">
+            <div className="flex-1 px-6 overflow-y-auto scrollbar-hide">
+              <div className="py-6 space-y-6">
 
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-lg font-semibold truncate">{(viewing.firstName || viewing.lastName) ? `${viewing.firstName ?? ""} ${viewing.lastName ?? ""}`.trim() : viewing.email}</div>
-                    <div className="text-sm text-muted-foreground break-words">{details?.user?.email || viewing.email}</div>
-                    {details?.user?.phone ? (
-                      <div className="text-sm text-muted-foreground break-words">{details.user.phone}</div>
-                    ) : null}
+                {/* Header Card with Gradient */}
+                <div className="relative overflow-hidden rounded-xl border bg-gradient-to-br from-primary/5 via-primary/3 to-background p-6 shadow-sm">
+                  <div className="absolute top-0 right-0 w-40 h-40 bg-primary/5 rounded-full blur-3xl -z-10" />
+                  <div className="relative space-y-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-xl font-bold truncate">
+                          {(viewing.firstName || viewing.lastName) ? `${viewing.firstName ?? ""} ${viewing.lastName ?? ""}`.trim() : viewing.email}
+                        </h3>
+                        <div className="mt-2 text-sm text-muted-foreground break-words">{details?.user?.email || viewing.email}</div>
+                        {details?.user?.phone && (
+                          <div className="mt-1 text-sm text-muted-foreground break-words">{details.user.phone}</div>
+                        )}
+                      </div>
+                      <UniversalBadge 
+                        kind="active" 
+                        value={viewing.isActive} 
+                        label={viewing.isActive ? "ACTIVE" : "INACTIVE"} 
+                      />
+                    </div>
 
-                  </div>
-
-                  <UniversalBadge kind="active" value={viewing.isActive} label={viewing.isActive ? "ACTIVE" : "INACTIVE"} />
-
-                </div>
-                <div className="flex justify-end">
-                  <Button asChild variant="outline" size="sm">
-                    <a href={`/dashboard/orders?userId=${encodeURIComponent(viewing.id)}`}>View all orders</a>
-                  </Button>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {(() => {
-                    const tags: string[] = [];
-                    const total = Number(details?.aggregates?.totalSpent ?? viewing.totalSpent ?? 0);
-                    const ordersCount = Number(details?.aggregates?.ordersCount ?? viewing.ordersCount ?? 0);
-                    const firstAt = details?.aggregates?.firstOrderAt ? new Date(details.aggregates.firstOrderAt) : null;
-                    if (total >= 1000) tags.push("VIP");
-                    if (ordersCount <= 2) tags.push("New");
-                    if (firstAt && (Date.now() - firstAt.getTime()) / (1000 * 60 * 60 * 24) <= 30) tags.push("Recent");
-                    return tags.length ? tags.map((t) => <Badge key={t} variant="secondary" className="capitalize">{t}</Badge>) : null;
-                  })()}
-                </div>
-
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div className="rounded-lg border p-4">
-                    <div className="text-xs text-muted-foreground">Total orders</div>
-                    <div className="mt-1 text-lg font-semibold">{Number(details?.aggregates?.ordersCount ?? viewing.ordersCount ?? 0)}</div>
-                  </div>
-                  <div className="rounded-lg border p-4">
-                    <div className="text-xs text-muted-foreground">Total spent</div>
-                    <div className="mt-1 text-lg font-semibold">{formatCurrency(Number(details?.aggregates?.totalSpent ?? viewing.totalSpent ?? 0), { currency: details?.currency || currency, locale: "en-CA" })}</div>
-                  </div>
-                  <div className="rounded-lg border p-4">
-                    <div className="text-xs text-muted-foreground">Avg order value</div>
-                    <div className="mt-1 text-lg font-semibold">{formatCurrency(Number(details?.aggregates?.avgOrderValue ?? viewing.avgOrderValue ?? 0), { currency: details?.currency || currency, locale: "en-CA" })}</div>
-                  </div>
-                  <div className="rounded-lg border p-4">
-                    <div className="text-xs text-muted-foreground">Last order</div>
-                    <div className="mt-1 text-lg font-semibold">{(details?.aggregates?.lastOrderAt || viewing.lastOrderAt) ? <LocalDate value={(details?.aggregates?.lastOrderAt || viewing.lastOrderAt) as any} /> : "—"}</div>
-                  </div>
-                  <div className="rounded-lg border p-4">
-                    <div className="text-xs text-muted-foreground">First order</div>
-                    <div className="mt-1 text-lg font-semibold">{details?.aggregates?.firstOrderAt ? <LocalDate value={details.aggregates.firstOrderAt as any} /> : "—"}</div>
-                  </div>
-                  <div className="rounded-lg border p-4">
-                    <div className="text-xs text-muted-foreground">Refunded total</div>
-                    <div className="mt-1 text-lg font-semibold">{formatCurrency(Number(details?.aggregates?.refundedTotal ?? 0), { currency: details?.currency || currency, locale: "en-CA" })}</div>
+                    {/* Customer Tags */}
+                    <div className="flex flex-wrap gap-2">
+                      {(() => {
+                        const tags: string[] = [];
+                        const total = Number(details?.aggregates?.totalSpent ?? viewing.totalSpent ?? 0);
+                        const ordersCount = Number(details?.aggregates?.ordersCount ?? viewing.ordersCount ?? 0);
+                        const firstAt = details?.aggregates?.firstOrderAt ? new Date(details.aggregates.firstOrderAt) : null;
+                        if (total >= 1000) tags.push("VIP");
+                        if (ordersCount <= 2) tags.push("New");
+                        if (firstAt && (Date.now() - firstAt.getTime()) / (1000 * 60 * 60 * 24) <= 30) tags.push("Recent");
+                        return tags.length ? tags.map((t) => (
+                          <Badge 
+                            key={t} 
+                            variant="secondary" 
+                            className="capitalize font-medium"
+                          >
+                            {t}
+                          </Badge>
+                        )) : null;
+                      })()}
+                    </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div className="rounded-lg border p-4">
-                    <div className="mb-2 text-xs text-muted-foreground">Default shipping</div>
+                {/* Stats Grid */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="rounded-xl border p-5 shadow-sm transition-all hover:shadow-md bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border-blue-500/30">
+                    <div className="flex items-center gap-2 mb-3">
+                      <ShoppingCart className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                      <div className="text-xs font-semibold uppercase tracking-wider text-blue-700 dark:text-blue-400">Total Orders</div>
+                    </div>
+                    <div className="text-xl font-bold text-blue-700 dark:text-blue-400">
+                      {Number(details?.aggregates?.ordersCount ?? viewing.ordersCount ?? 0)}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border p-5 shadow-sm transition-all hover:shadow-md bg-gradient-to-br from-emerald-500/10 to-green-500/10 border-emerald-500/30">
+                    <div className="flex items-center gap-2 mb-3">
+                      <DollarSign className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                      <div className="text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Total Spent</div>
+                    </div>
+                    <div className="text-xl font-bold text-emerald-700 dark:text-emerald-400">
+                      {formatCurrency(Number(details?.aggregates?.totalSpent ?? viewing.totalSpent ?? 0), { currency: details?.currency || currency, locale: "en-CA" }).replace(/^[A-Z]{2,3}\$?/, '$')}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border p-5 shadow-sm transition-all hover:shadow-md bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-purple-500/30">
+                    <div className="flex items-center gap-2 mb-3">
+                      <TrendingUp className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                      <div className="text-xs font-semibold uppercase tracking-wider text-purple-700 dark:text-purple-400">Avg Order</div>
+                    </div>
+                    <div className="text-xl font-bold text-purple-700 dark:text-purple-400">
+                      {formatCurrency(Number(details?.aggregates?.avgOrderValue ?? viewing.avgOrderValue ?? 0), { currency: details?.currency || currency, locale: "en-CA" }).replace(/^[A-Z]{2,3}\$?/, '$')}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border p-5 shadow-sm transition-all hover:shadow-md bg-gradient-to-br from-amber-500/10 to-orange-500/10 border-amber-500/30">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Calendar className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                      <div className="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">Last Order</div>
+                    </div>
+                    <div className="text-lg font-bold text-amber-700 dark:text-amber-400">
+                      {(details?.aggregates?.lastOrderAt || viewing.lastOrderAt) ? <LocalDate value={(details?.aggregates?.lastOrderAt || viewing.lastOrderAt) as any} /> : "—"}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border p-5 shadow-sm transition-all hover:shadow-md bg-muted/50">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Calendar className="h-5 w-5 text-muted-foreground" />
+                      <div className="text-xs font-semibold uppercase tracking-wider">First Order</div>
+                    </div>
+                    <div className="text-lg font-bold">
+                      {details?.aggregates?.firstOrderAt ? <LocalDate value={details.aggregates.firstOrderAt as any} /> : "—"}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border p-5 shadow-sm transition-all hover:shadow-md bg-muted/50">
+                    <div className="flex items-center gap-2 mb-3">
+                      <RotateCcw className="h-5 w-5 text-muted-foreground" />
+                      <div className="text-xs font-semibold uppercase tracking-wider">Refunded</div>
+                    </div>
+                    <div className="text-lg font-bold">
+                      {formatCurrency(Number(details?.aggregates?.refundedTotal ?? 0), { currency: details?.currency || currency, locale: "en-CA" }).replace(/^[A-Z]{2,3}\$?/, '$')}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Addresses Section */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="rounded-xl border p-5 bg-muted/50 shadow-sm">
+                    <div className="flex items-center gap-2 mb-4">
+                      <MapPin className="h-5 w-5 text-muted-foreground" />
+                      <div className="text-sm font-semibold">Default Shipping</div>
+                    </div>
                     {detailsLoading ? (
                       <div className="text-sm text-muted-foreground">Loading…</div>
                     ) : details?.shippingAddress ? (
-                      <div className="text-sm leading-6">
-                        <div className="font-medium">{details.shippingAddress.firstName} {details.shippingAddress.lastName}</div>
+                      <div className="text-sm leading-relaxed space-y-1">
+                        <div className="font-semibold">{details.shippingAddress.firstName} {details.shippingAddress.lastName}</div>
                         <div>{details.shippingAddress.addressLine1}</div>
-                        {details.shippingAddress.addressLine2 ? <div>{details.shippingAddress.addressLine2}</div> : null}
+                        {details.shippingAddress.addressLine2 && <div>{details.shippingAddress.addressLine2}</div>}
                         <div>{details.shippingAddress.city}, {details.shippingAddress.state} {details.shippingAddress.postalCode}</div>
                         <div>{details.shippingAddress.country}</div>
-                        <div className="text-muted-foreground">{details.shippingAddress.phone}</div>
+                        <div className="text-muted-foreground pt-1">{details.shippingAddress.phone}</div>
                       </div>
                     ) : (
                       <div className="text-sm text-muted-foreground">No shipping address</div>
                     )}
                   </div>
-                  <div className="rounded-lg border p-4">
-                    <div className="mb-2 text-xs text-muted-foreground">Default billing</div>
+
+                  <div className="rounded-xl border p-5 bg-muted/50 shadow-sm">
+                    <div className="flex items-center gap-2 mb-4">
+                      <CreditCard className="h-5 w-5 text-muted-foreground" />
+                      <div className="text-sm font-semibold">Default Billing</div>
+                    </div>
                     {detailsLoading ? (
                       <div className="text-sm text-muted-foreground">Loading…</div>
                     ) : details?.billingAddress ? (
-                      <div className="text-sm leading-6">
-                        <div className="font-medium">{details.billingAddress.firstName} {details.billingAddress.lastName}</div>
+                      <div className="text-sm leading-relaxed space-y-1">
+                        <div className="font-semibold">{details.billingAddress.firstName} {details.billingAddress.lastName}</div>
                         <div>{details.billingAddress.addressLine1}</div>
-                        {details.billingAddress.addressLine2 ? <div>{details.billingAddress.addressLine2}</div> : null}
+                        {details.billingAddress.addressLine2 && <div>{details.billingAddress.addressLine2}</div>}
                         <div>{details.billingAddress.city}, {details.billingAddress.state} {details.billingAddress.postalCode}</div>
                         <div>{details.billingAddress.country}</div>
-                        {details.billingAddress.phone ? <div className="text-muted-foreground">{details.billingAddress.phone}</div> : null}
+                        {details.billingAddress.phone && <div className="text-muted-foreground pt-1">{details.billingAddress.phone}</div>}
                       </div>
                     ) : (
                       <div className="text-sm text-muted-foreground">No billing address</div>
@@ -460,32 +512,49 @@ export default function CustomersPage() {
                   </div>
                 </div>
 
-                <div>
-                  <div className="mb-2 text-sm font-medium">Recent orders</div>
-                  <div className="rounded-lg border overflow-hidden">
-                    <div className="grid grid-cols-4 bg-muted px-3 py-2 text-xs font-medium">
-                      <div>Order</div>
-                      <div>Status</div>
-                      <div className="text-right">Total</div>
-                      <div className="text-right">Date</div>
-                    </div>
-                    <div className="max-h-72 overflow-auto">
-                      {ordersLoading ? (
-                        <div className="p-4 text-sm text-muted-foreground">Loading…</div>
-                      ) : orders.length ? (
-                        orders.map((o) => (
-                          <div key={o.id} className="grid grid-cols-4 border-t px-3 py-2 text-sm">
-                            <div className="truncate">{o.orderNumber}</div>
-                            <div className="capitalize">{String(o.status)}</div>
-                            <div className="text-right">{formatCurrency(Number(o.totalAmount || 0), { currency: o.currency || details?.currency || currency, locale: "en-CA" })}</div>
-                            <div className="text-right text-muted-foreground"><LocalDate value={o.createdAt} /></div>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="p-4 text-sm text-muted-foreground">No orders</div>
-                      )}
-                    </div>
+                {/* Recent Orders Table */}
+                <div className="overflow-hidden rounded-xl border shadow-sm">
+                  <div className="bg-muted/50 px-5 py-4 border-b">
+                    <div className="text-base font-semibold">Recent Orders</div>
+                    <div className="text-xs text-muted-foreground mt-1">Latest customer purchases</div>
                   </div>
+
+                  <div className="grid grid-cols-12 gap-3 bg-muted/30 px-5 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    <div className="col-span-4">Order</div>
+                    <div className="col-span-3">Status</div>
+                    <div className="col-span-2 text-right">Total</div>
+                    <div className="col-span-3 text-right">Date</div>
+                  </div>
+
+                  {ordersLoading ? (
+                    <div className="p-12 text-center">
+                      <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent" />
+                      <div className="mt-3 text-sm font-medium text-muted-foreground">Loading orders...</div>
+                    </div>
+                  ) : orders.length ? (
+                    <div className="divide-y max-h-80 overflow-y-auto scrollbar-hide">
+                      {orders.map((o) => (
+                        <div key={o.id} className="grid grid-cols-12 gap-3 px-5 py-4 text-sm hover:bg-muted/50 transition-colors">
+                          <div className="col-span-4 font-mono font-semibold text-primary">#{o.orderNumber}</div>
+                          <div className="col-span-3 capitalize font-medium">{String(o.status)}</div>
+                          <div className="col-span-2 text-right font-bold">
+                            {formatCurrency(Number(o.totalAmount || 0), { currency: o.currency || details?.currency || currency, locale: "en-CA" }).replace(/^[A-Z]{2,3}\$?/, '$')}
+                          </div>
+                          <div className="col-span-3 text-right text-xs text-muted-foreground">
+                            <LocalDate value={o.createdAt} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-12 text-center">
+                      <div className="text-5xl mb-3">🛒</div>
+                      <div className="text-base font-semibold">No orders yet</div>
+                      <div className="text-sm text-muted-foreground mt-2">
+                        This customer hasn't placed any orders
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
